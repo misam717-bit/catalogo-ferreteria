@@ -2,10 +2,8 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <!-- CORRECCIÓN: Usar device-width para una correcta responsividad en móviles -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Administración</title>
-    <!-- El enlace a style.css se mantiene, aunque el estilo principal esté en <style> -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         /* --- PALETA DE COLORES DE FERRETERÍA: AMARILLO (#FFD700) y NEGRO (#1A1A1A) --- */
@@ -406,7 +404,11 @@
                                     enctype="multipart/form-data" 
                                     style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
                                     {% if producto.imagen_url %}
-                                        <img src="{{ url_for('static', filename=producto.imagen_url) }}" alt="{{ producto.nombre }}" class="product-thumb">
+                                        <!-- Usar directamente producto.imagen_url (la URL de Cloudinary) -->
+                                        <img src="{{ producto.imagen_url }}" 
+                                             alt="{{ producto.nombre }}" 
+                                             class="product-thumb"
+                                             onerror="this.onerror=null; this.src='https://placehold.co/50x50/CCCCCC/333333?text=Error';">
                                     {% else %}
                                         <span style="font-size: 10px; height: 50px; display: flex; align-items: center;">Sin foto</span>
                                     {% endif %}
@@ -474,12 +476,7 @@
         
         <section class="admin-db-section">
             <h2>4. Herramientas</h2>
-            <!-- CORRECCIÓN: Usar comentarios de Jinja2 para evitar que Flask/Jinja intente procesar url_for() si la ruta no existe -->
-            {#
-            <form action="{{ url_for('reiniciar_db') }}" method="get" onsubmit="return confirm('¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará todos los datos.');" style="display: inline;">
-                <button type="submit" class="button reset-db-button">Reiniciar Base de Datos</button>
-            </form>
-            #}
+            <!-- Reiniciar DB desactivado por seguridad en entornos de preview -->
             <button type="button" class="button reset-db-button" disabled>Reiniciar Base de Datos (Desactivado)</button>
         </section>
 
