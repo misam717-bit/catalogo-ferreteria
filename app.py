@@ -439,7 +439,6 @@ def importar_productos():
     conn = None
     try:
         # Decodificación inicial para manejar archivos de Excel/Windows (cp1252 o utf-8)
-        # Usaremos io.StringIO para construir el contenido en memoria para copy_from
         
         # Leemos el archivo completo en memoria con una decodificación tolerante
         file_content_raw = file.stream.read().decode('utf-8', errors='replace')
@@ -453,9 +452,8 @@ def importar_productos():
         
         # --- 1. PREPARACIÓN Y LIMPIEZA DE DATOS ---
         
-        # Usamos csv.reader para parsear el contenido, manejar comillas, etc.
-        # Esto nos permite limpiar y transformar los datos antes de la copia masiva
-        reader = csv.reader(io.StringIO(file_content_raw))
+        # Usamos el dialecto 'excel' para el lector de CSV. Esto ayuda a manejar comillas.
+        reader = csv.reader(io.StringIO(file_content_raw), dialect='excel')
         
         # Saltar el encabezado y limpiar el BOM si existe en la primera columna
         header_row = next(reader, None)
@@ -464,33 +462,53 @@ def importar_productos():
 
         total_filas = 0
         productos_limpios_csv = io.StringIO()
-        csv_writer = csv.writer(productos_limpios_csv)
+        
+        # USAMOS QUOTE_MINIMAL PARA QUE csv_writer ENCIERRE LOS CAMPOS CON COMAS EN COMILLAS
+        csv_writer = csv.writer(productos_limpios_csv, quoting=csv.QUOTE_MINIMAL)
+
+        # Definimos los índices de las columnas que nos interesan en tu CSV de 11 columnas
+        # ASUMIMOS:
+        # Código = Índice 0 (Columna 1)
+        # Nombre = Índice 1 (Columna 2)
+        # Descripción = Índice 2 (Columna 3)
+        # Precio = Índice 3 (Columna 4)
+        CODIGO_INDEX = 0
+        NOMBRE_INDEX = 1
+        DESCRIPCION_INDEX = 2
+        PRECIO_INDEX = 3
+        MIN_COLUMNS_REQUIRED = 4 # Requerimos al menos 4 columnas
 
         for row in reader:
             total_filas += 1
-            if len(row) < 4: 
+            # 
+            # FIX CRÍTICO: Asegurarnos de que la fila tenga al menos las columnas requeridas (4)
+            # 
+            if len(row) < MIN_COLUMNS_REQUIRED: 
+                print(f"Advertencia de Formato: Salteando fila {total_filas} por no tener las {MIN_COLUMNS_REQUIRED} columnas mínimas.")
                 continue 
 
             try:
-                # Limpieza de datos
-                codigo = row[0].strip().lstrip('\ufeff') # Limpieza explícita de BOM en código
-                nombre = row[1].strip() 
-                descripcion = row[2].strip() if len(row) > 2 else '' 
+                # Extracción y Limpieza de datos (usando los índices definidos)
+                codigo = row[CODIGO_INDEX].strip().lstrip('\ufeff') 
+                nombre = row[NOMBRE_INDEX].strip() 
+                descripcion = row[DESCRIPCION_INDEX].strip()
                 
-                # Limpieza de precio: elimina símbolos y lo convierte a float.
-                precio_str = row[3].strip().replace('$', '').replace(',', '')
+                # Limpieza de precio: elimina símbolos y convierte a float.
+                precio_str = row[PRECIO_INDEX].strip().replace('$', '').replace('.', '').replace(',', '.') # Limpieza agresiva de formato de moneda
                 precio = float(precio_str)
-                imagen_url = '' # Null/vacio en Postgres para la URL (es un campo opcional)
+                
+                # CREACIÓN DE LA COLUMNA FALTANTE: Se establece la URL de la imagen como vacía
+                imagen_url = '' 
                 
                 # Escribimos la fila limpia al nuevo stream CSV en el orden de la DB:
                 # (codigo, nombre, descripcion, precio, imagen_url)
                 csv_writer.writerow([codigo, nombre, descripcion, precio, imagen_url])
                 
-            except ValueError:
-                print(f"Advertencia de Valor: Salteando fila {total_filas} con código '{row[0]}' por error de precio.")
+            except ValueError as ve:
+                print(f"Advertencia de Valor: Salteando fila {total_filas} con código '{row[CODIGO_INDEX]}' por error de precio o formato: {ve}")
                 continue 
             except Exception as e:
-                print(f"Error desconocido en fila {total_filas} con código '{row[0]}': {e}")
+                print(f"Error desconocido en fila {total_filas} con código '{row[CODIGO_INDEX]}': {e}")
                 continue
         
         # Si no hay datos, retornar
@@ -505,10 +523,7 @@ def importar_productos():
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Usar una tabla temporal para la ingesta y luego manejar los conflictos de código (UniqueViolation)
-        # Es mucho más limpio y eficiente que usar ON CONFLICT en COPY
-        
-        # 2.1 Crear tabla temporal
+        # Usar una tabla temporal para la ingesta
         cur.execute("""
             CREATE TEMPORARY TABLE temp_productos (
                 codigo TEXT,
@@ -519,17 +534,18 @@ def importar_productos():
             ) ON COMMIT DROP;
         """)
 
-        # 2.2 Usar copy_from para la inserción masiva a la tabla temporal
-        # Indicamos las columnas de la tabla temporal a las que mapear los datos del CSV
+        # Usar copy_from para la inserción masiva a la tabla temporal
         cur.copy_from(
             productos_limpios_csv, 
             'temp_productos', 
+            # IMPORTANTE: Aquí se especifica que son 5 columnas
             columns=('codigo', 'nombre', 'descripcion', 'precio', 'imagen_url'),
-            sep=',' # El separador que usamos al escribir el stream
+            sep=',', 
+            # ESPECIFICAR EL QUOTING para copy_from ya que csv_writer lo usó
+            quote='"' 
         )
 
-        # 2.3 Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
-        # Esto solo inserta los nuevos productos (los que tienen código único)
+        # Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
         cur.execute("""
             INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url)
             SELECT codigo, nombre, descripcion, precio, imagen_url
@@ -537,17 +553,20 @@ def importar_productos():
             ON CONFLICT (codigo) DO NOTHING;
         """)
 
+        # Calcular totales (esta es una estimación aproximada)
+        total_productos_csv = total_filas 
         total_insertados = cur.rowcount
-        total_duplicados = total_filas - total_insertados
+        total_duplicados = total_productos_csv - total_insertados
 
-        conn.commit() # Commit único
+        conn.commit() 
         
-        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Productos duplicados u omitidos por error: {total_duplicados}.', 'success')
+        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Se detectaron {total_duplicados} filas con código duplicado o error de formato/columnas.', 'success')
         
     except Exception as e:
         if 'conn' in locals() and conn:
             conn.rollback()
-        flash(f'Error grave durante la importación: {e}', 'error')
+        # Mensaje de error más detallado en caso de fallo de formato
+        flash(f'Error grave durante la importación. Verifique que las columnas 1, 2, 3 y 4 de su CSV contienen Código, Nombre, Descripción y Precio. Detalles: {e}', 'error')
         print(f'Error de importación general: {e}')
     finally:
         if conn:
