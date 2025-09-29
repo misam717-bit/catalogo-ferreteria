@@ -463,9 +463,11 @@ def importar_productos():
         total_filas = 0
         productos_limpios_csv = io.StringIO()
         
-        # USAMOS QUOTE_MINIMAL PARA QUE csv_writer ENCIERRE LOS CAMPOS CON COMAS EN COMILLAS
-        # Esto asegura que el CSV limpio cumpla con el formato estándar que PostgreSQL espera.
+        # FIX CLAVE: Escribir el encabezado para que COPY FROM sepa el orden exacto de las columnas
+        # Aunque COPY WITH CSV no necesita el encabezado por defecto, ayuda a alinear los datos.
+        header = ['codigo', 'nombre', 'descripcion', 'precio', 'imagen_url']
         csv_writer = csv.writer(productos_limpios_csv, quoting=csv.QUOTE_MINIMAL)
+        csv_writer.writerow(header) # Escribir el encabezado
 
         # Definimos los índices de las columnas que nos interesan en tu CSV de 11 columnas
         # ASUMIMOS:
@@ -492,6 +494,9 @@ def importar_productos():
                 # Extracción y Limpieza de datos (usando los índices definidos)
                 codigo = row[CODIGO_INDEX].strip().lstrip('\ufeff') 
                 nombre = row[NOMBRE_INDEX].strip() 
+                # FIX APLICADO: Aunque la descripción venga en la Columna 3 (índice 2), la descripción de tu fila
+                # parece estar contenida dentro de la columna del nombre. Vamos a usar la Columna 3 para Descripción
+                # y si está vacía, usaremos una cadena vacía.
                 descripcion = row[DESCRIPCION_INDEX].strip()
                 
                 # Limpieza de precio: elimina símbolos y convierte a float.
@@ -503,6 +508,8 @@ def importar_productos():
                 
                 # Escribimos la fila limpia al nuevo stream CSV en el orden de la DB:
                 # (codigo, nombre, descripcion, precio, imagen_url)
+                # El uso de csv_writer con QUOTE_MINIMAL asegura que si nombre o descripción
+                # tienen comas, serán encerrados entre comillas dobles, lo que PostgreSQL espera.
                 csv_writer.writerow([codigo, nombre, descripcion, precio, imagen_url])
                 
             except ValueError as ve:
@@ -513,7 +520,7 @@ def importar_productos():
                 continue
         
         # Si no hay datos, retornar
-        if productos_limpios_csv.tell() == 0:
+        if productos_limpios_csv.tell() <= len(','.join(header).encode('utf-8')) + 1 : # Si solo hay encabezado
             flash('El archivo CSV no contenía productos válidos para importar.', 'warning')
             return redirect(url_for('admin'))
 
@@ -535,17 +542,17 @@ def importar_productos():
             ) ON COMMIT DROP;
         """)
 
-        # Usar copy_from para la inserción masiva a la tabla temporal
-        cur.copy_from(
-            productos_limpios_csv, 
-            'temp_productos', 
-            # FIX CRÍTICO: Eliminar el argumento 'format' que no es aceptado por psycopg2.copy_from
-            # format='csv', # Eliminado 
-            # IMPORTANTE: Aquí se especifica que son 5 columnas
-            columns=('codigo', 'nombre', 'descripcion', 'precio', 'imagen_url'),
-            sep=',', 
-        )
-
+        # *** FIX CLAVE: USAR EL COMANDO SQL COPY FROM STDIN CON EL FORMATO CSV EXPLÍCITO ***
+        # Esto le indica a PostgreSQL que use su parser de CSV robusto (que maneja comas en campos entrecomillados)
+        copy_sql = """
+            COPY temp_productos (codigo, nombre, descripcion, precio, imagen_url)
+            FROM STDIN
+            WITH (FORMAT CSV, HEADER TRUE, DELIMITER ',');
+        """
+        
+        # Pasamos el string_io al método copy_expert para que lo lea.
+        cur.copy_expert(copy_sql, productos_limpios_csv)
+        
         # Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
         cur.execute("""
             INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url)
