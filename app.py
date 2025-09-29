@@ -438,89 +438,111 @@ def importar_productos():
 
     conn = None
     try:
-        # Decodificación recomendada para manejar archivos de Windows (cp1252 o utf-8)
-        # Usamos io.TextIOWrapper para manejar la decodificación durante la lectura
-        # Usaremos 'utf-8' como principal, si falla, puede intentar 'cp1252' o 'latin-1'
-        try:
-            stream = io.TextIOWrapper(file.stream, encoding='utf-8', errors='replace')
-            stream.readline() # Leer una línea para detectar el BOM si existe y posicionar el cursor
-            stream.seek(0) # Volver al inicio después de la lectura de prueba
-
-            # Si la línea leída contiene el BOM, lo eliminamos.
-            # Sin embargo, el problema principal es la codificación del archivo, no el stream.
-            # Mantendremos la lectura normal y dejamos que el csv.reader maneje el contenido
-            
-        except UnicodeDecodeError:
-            # Si UTF-8 falla, intenta con cp1252 (común en Excel en español)
-             stream = io.TextIOWrapper(file.stream, encoding='cp1252', errors='replace')
-
-        reader = csv.reader(stream)
+        # Decodificación inicial para manejar archivos de Excel/Windows (cp1252 o utf-8)
+        # Usaremos io.StringIO para construir el contenido en memoria para copy_from
         
-        # FIX BOM en el header: Intentamos leer y limpiar el primer elemento del primer row si el BOM persistió
+        # Leemos el archivo completo en memoria con una decodificación tolerante
+        file_content_raw = file.stream.read().decode('utf-8', errors='replace')
+        # Si la decodificación falla, intentamos cp1252 que es común en Excel de Windows
+        if '\ufffd' in file_content_raw:
+             file.stream.seek(0)
+             file_content_raw = file.stream.read().decode('cp1252', errors='replace')
+
+        # Usamos StringIO para simular un archivo en disco, necesario para copy_from
+        string_io = io.StringIO()
+        
+        # --- 1. PREPARACIÓN Y LIMPIEZA DE DATOS ---
+        
+        # Usamos csv.reader para parsear el contenido, manejar comillas, etc.
+        # Esto nos permite limpiar y transformar los datos antes de la copia masiva
+        reader = csv.reader(io.StringIO(file_content_raw))
+        
+        # Saltar el encabezado y limpiar el BOM si existe en la primera columna
         header_row = next(reader, None)
         if header_row and header_row[0].startswith('\ufeff'): # \ufeff es el BOM
             header_row[0] = header_row[0].lstrip('\ufeff')
-        
-        # No hacemos nada con el header_row, simplemente lo saltamos si existía.
-        
-        datos_a_insertar = []
+
         total_filas = 0
-        
-        # --- 1. PREPARACIÓN DE DATOS (Rápida y en memoria) ---
+        productos_limpios_csv = io.StringIO()
+        csv_writer = csv.writer(productos_limpios_csv)
+
         for row in reader:
             total_filas += 1
-            # Se requiere un mínimo de 4 columnas (código, nombre, descripción, precio)
             if len(row) < 4: 
-                continue # Salta filas incompletas
+                continue 
 
             try:
-                # El .strip() elimina cualquier espacio y potencial BOM si se filtró
+                # Limpieza de datos
                 codigo = row[0].strip().lstrip('\ufeff') # Limpieza explícita de BOM en código
                 nombre = row[1].strip() 
-                # Aseguramos que la descripción sea un string, aunque esté vacía
                 descripcion = row[2].strip() if len(row) > 2 else '' 
                 
-                # Limpieza de precio: elimina $, comas, puntos (si son separadores de miles)
+                # Limpieza de precio: elimina símbolos y lo convierte a float.
                 precio_str = row[3].strip().replace('$', '').replace(',', '')
-                # Intenta convertir a float, si falla, usa 0.0
                 precio = float(precio_str)
-                imagen_url = None # Por defecto no hay imagen
+                imagen_url = '' # Null/vacio en Postgres para la URL (es un campo opcional)
                 
-                # Agregar la tupla de datos a la lista
-                datos_a_insertar.append((codigo, nombre, descripcion, precio, imagen_url))
+                # Escribimos la fila limpia al nuevo stream CSV en el orden de la DB:
+                # (codigo, nombre, descripcion, precio, imagen_url)
+                csv_writer.writerow([codigo, nombre, descripcion, precio, imagen_url])
                 
             except ValueError:
-                # Ignorar filas con precio inválido, pero seguir procesando
                 print(f"Advertencia de Valor: Salteando fila {total_filas} con código '{row[0]}' por error de precio.")
                 continue 
             except Exception as e:
                 print(f"Error desconocido en fila {total_filas} con código '{row[0]}': {e}")
                 continue
-
-        # --- 2. CONEXIÓN Y BULK INSERT (Una sola operación de DB) ---
-        if not datos_a_insertar:
+        
+        # Si no hay datos, retornar
+        if productos_limpios_csv.tell() == 0:
             flash('El archivo CSV no contenía productos válidos para importar.', 'warning')
             return redirect(url_for('admin'))
+
+        # Mover el cursor al inicio del stream para que copy_from pueda leerlo
+        productos_limpios_csv.seek(0)
             
+        # --- 2. CONEXIÓN Y COPY FROM (El método más rápido) ---
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # Consulta SQL con ON CONFLICT DO NOTHING (evita duplicados sin fallar)
-        sql_insert = """
-            INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) 
-            VALUES (%s, %s, %s, %s, %s)
+        # Usar una tabla temporal para la ingesta y luego manejar los conflictos de código (UniqueViolation)
+        # Es mucho más limpio y eficiente que usar ON CONFLICT en COPY
+        
+        # 2.1 Crear tabla temporal
+        cur.execute("""
+            CREATE TEMPORARY TABLE temp_productos (
+                codigo TEXT,
+                nombre TEXT,
+                descripcion TEXT,
+                precio REAL,
+                imagen_url TEXT
+            ) ON COMMIT DROP;
+        """)
+
+        # 2.2 Usar copy_from para la inserción masiva a la tabla temporal
+        # Indicamos las columnas de la tabla temporal a las que mapear los datos del CSV
+        cur.copy_from(
+            productos_limpios_csv, 
+            'temp_productos', 
+            columns=('codigo', 'nombre', 'descripcion', 'precio', 'imagen_url'),
+            sep=',' # El separador que usamos al escribir el stream
+        )
+
+        # 2.3 Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
+        # Esto solo inserta los nuevos productos (los que tienen código único)
+        cur.execute("""
+            INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url)
+            SELECT codigo, nombre, descripcion, precio, imagen_url
+            FROM temp_productos
             ON CONFLICT (codigo) DO NOTHING;
-        """
-        
-        # Ejecuta la inserción masiva: esto resolverá el timeout.
-        cur.executemany(sql_insert, datos_a_insertar)
-        
+        """)
+
         total_insertados = cur.rowcount
-        total_duplicados = len(datos_a_insertar) - total_insertados
+        total_duplicados = total_filas - total_insertados
 
         conn.commit() # Commit único
         
-        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Productos duplicados omitidos: {total_duplicados}.', 'success')
+        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Productos duplicados u omitidos por error: {total_duplicados}.', 'success')
         
     except Exception as e:
         if 'conn' in locals() and conn:
