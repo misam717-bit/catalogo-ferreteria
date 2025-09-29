@@ -1,10 +1,10 @@
+import os
 from flask import Flask, render_template, request, url_for, flash, redirect
 # Se importa el driver de PostgreSQL
 import psycopg2 
 from psycopg2 import sql 
 # IMPORTACIÓN CRÍTICA: Necesario para usar el cursor de diccionario (DictCursor)
 import psycopg2.extras 
-import os
 import secrets
 import csv
 import io
@@ -18,11 +18,13 @@ import cloudinary.uploader
 import cloudinary.api
 
 # Cargar las variables de entorno del archivo .env
+# En un entorno de producción como Render, esto se omite ya que las variables se cargan automáticamente
 load_dotenv()
 
 # --- CONFIGURACIÓN DE FLASK ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'una_clave_secreta_fuerte')
+# Usa la variable de entorno SECRET_KEY si existe, sino usa una clave fuerte por defecto
+app.secret_key = os.environ.get('SECRET_KEY', 'una_clave_secreta_fuerte_y_aleatoria_para_prod')
 
 # Define cuántos productos quieres mostrar por página
 PRODUCTS_PER_PAGE = 20
@@ -52,7 +54,8 @@ def get_db_connection():
         if not db_url:
             raise ValueError("DATABASE_URL no está configurada.")
         
-        # FIX: Limpiar la URL de cualquier espacio o comilla indeseada
+        # FIX MANTENIDO: Limpiar la URL de cualquier espacio, comilla doble o simple indeseada
+        # Esto previene errores de conexión debido a un mal parseo de la variable de entorno.
         db_url = db_url.strip().strip('"').strip("'")
             
         # Conexión a PostgreSQL. 
@@ -68,30 +71,36 @@ def init_db():
     """
     Inicializa el esquema de la base de datos.
     """
-    conn = get_db_connection()
-    # *** FIX CRÍTICO: Se debe usar un cursor para ejecutar el SQL ***
-    cur = conn.cursor()
-    
-    # 1. Crear la tabla 'productos' si no existe
-    # Se utiliza sql.SQL() para una sintaxis segura en psycopg2
-    cur.execute(sql.SQL("""
-        CREATE TABLE IF NOT EXISTS productos (
-            id SERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE,
-            nombre TEXT NOT NULL,
-            descripcion TEXT,
-            precio REAL NOT NULL,
-            imagen_url TEXT
-        );
-    """))
-    
-    conn.commit()
-    cur.close() # Opcional, pero buena práctica
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        # *** FIX CRÍTICO: Se debe usar un cursor para ejecutar el SQL ***
+        cur = conn.cursor()
+        
+        # 1. Crear la tabla 'productos' si no existe
+        # Se utiliza sql.SQL() para una sintaxis segura en psycopg2
+        cur.execute(sql.SQL("""
+            CREATE TABLE IF NOT EXISTS productos (
+                id SERIAL PRIMARY KEY,
+                codigo TEXT UNIQUE NOT NULL, -- Se asegura que el código no sea NULL
+                nombre TEXT NOT NULL,
+                descripcion TEXT,
+                precio REAL NOT NULL,
+                imagen_url TEXT
+            );
+        """))
+        
+        conn.commit()
+    except Exception as e:
+        print(f"Error al inicializar la base de datos: {e}")
+    finally:
+        if cur: cur.close() 
+        if conn: conn.close()
 
 # Asegurar que la DB se inicializa con el schema correcto
+# Esto se ejecuta una sola vez al cargar la aplicación
 with app.app_context():
-    # La llamada a init_db ahora usa el get_db_connection corregido
     init_db()
 
 # Nueva función auxiliar para buscar productos por código (psycopg2)
@@ -117,7 +126,7 @@ def get_product(product_id):
     return dict(product) if product else None
 
 
-# --- FUNCIÓN REESCRITA PARA CLOUDINARY (se mantiene intacta) ---
+# --- FUNCIONES DE CLOUDINARY (Subida y Eliminación) ---
 def subir_imagen_a_cloudinary(file, public_id_prefix=None):
     if file and file.filename:
         try:
@@ -125,6 +134,7 @@ def subir_imagen_a_cloudinary(file, public_id_prefix=None):
                 file, 
                 folder=CLOUDINARY_FOLDER,
                 resource_type="image",
+                # Optimización para buena calidad y formato automático
                 quality="auto:good",
                 fetch_format="auto"
             )
@@ -136,24 +146,22 @@ def subir_imagen_a_cloudinary(file, public_id_prefix=None):
             return None
     return None
 
-# --- FUNCIÓN REESCRITA PARA CLOUDINARY (se mantiene intacta) ---
 def eliminar_imagen_de_cloudinary(imagen_url):
     if not imagen_url:
         return True
     
     try:
+        # Extraer el ID público de la URL segura de Cloudinary
         path_segments = imagen_url.split('/')
         file_name_with_ext = path_segments[-1]
         public_id = os.path.splitext(file_name_with_ext)[0]
+        # Cloudinary necesita el folder + public_id
         cloudinary_id = f"{CLOUDINARY_FOLDER}/{public_id}"
         
         result = cloudinary.uploader.destroy(cloudinary_id)
         
-        if result.get('result') == 'ok':
-            print(f"Imagen {cloudinary_id} eliminada de Cloudinary.")
-            return True
-        elif result.get('result') == 'not found':
-            print(f"Advertencia: Imagen {cloudinary_id} no encontrada en Cloudinary.")
+        if result.get('result') in ('ok', 'not found'):
+            print(f"Imagen {cloudinary_id} eliminada de Cloudinary (o no existía).")
             return True
         else:
             print(f"Error desconocido al eliminar de Cloudinary: {result}")
@@ -170,18 +178,17 @@ def index():
     conn = get_db_connection()
     # USANDO DICTCURSOR
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    # Ejecuta SQL y obtiene todos los productos
+    # Ejecuta SQL y obtiene todos los productos, ordenados del más nuevo al más antiguo
     cur.execute('SELECT * FROM productos ORDER BY id DESC')
     productos = cur.fetchall()
     conn.close()
     return render_template('index.html', productos=[dict(row) for row in productos])
 
 
-# --- RUTA DE ADMINISTRACIÓN (MODIFICADA: Búsqueda simple con LIKE) ---
+# --- RUTA DE ADMINISTRACIÓN (Paginación y Búsqueda) ---
 @app.route('/admin')
 def admin():
     conn = get_db_connection()
-    # USANDO DICTCURSOR
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     page = request.args.get('page', 1, type=int)
@@ -217,10 +224,17 @@ def admin():
     # 3. Calcular la información de paginación
     total_pages = math.ceil(total_productos / PRODUCTS_PER_PAGE)
     
+    # Lógica para mostrar un rango de 5 páginas (2 antes, página actual, 2 después)
     current_page = page
     start_page = max(1, current_page - 2)
     end_page = min(total_pages, current_page + 2)
     
+    # Ajustar el rango si estamos cerca del inicio o el final
+    if current_page <= 3:
+        end_page = min(total_pages, 5)
+    if current_page >= total_pages - 2:
+        start_page = max(1, total_pages - 4)
+
     pages = range(start_page, end_page + 1)
 
     # Convertir psycopg2.Row a dicts para compatibilidad con render_template
@@ -236,13 +250,14 @@ def admin():
         pages=pages
     )
 
-# --- RUTA MODIFICADA: add_product ---
+# --- RUTA DE CREACIÓN: add_product ---
 @app.route('/add_product', methods=('POST',))
 def add_product():
     if request.method == "POST":
-        codigo = request.form['codigo'] 
-        nombre = request.form['nombre']
-        descripcion = request.form.get('descripcion', '') 
+        # Asegurarse de que el código no tenga espacios extra
+        codigo = request.form['codigo'].strip() 
+        nombre = request.form['nombre'].strip()
+        descripcion = request.form.get('descripcion', '').strip() 
         precio = request.form['precio']
         imagen_url = None
 
@@ -250,23 +265,21 @@ def add_product():
         if file and file.filename != '':
             imagen_url = subir_imagen_a_cloudinary(file)
 
-        if not nombre or not precio:
-            flash('El nombre y el precio son requeridos.', 'error')
+        if not nombre or not precio or not codigo:
+            flash('El código, nombre y precio son requeridos.', 'error')
         else:
             conn = get_db_connection()
-            # Se crea un cursor
             cur = conn.cursor()
 
             try:
-                # Se usa %s para psycopg2 en lugar de ?
+                # Se usa %s para psycopg2
                 cur.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
                             (codigo, nombre, descripcion, precio, imagen_url))
                 conn.commit()
                 flash('El producto se ha agregado correctamente.', 'success')
             except psycopg2.errors.UniqueViolation as e:
-                # Maneja el error de código duplicado (UniqueViolation)
-                conn.rollback() # Deshace la transacción
-                flash(f'Error: El código de producto "{codigo}" ya existe en la base de datos.', 'error')
+                conn.rollback() 
+                flash(f'Error: El código de producto "{codigo}" ya existe en la base de datos. Por favor, use uno diferente.', 'error')
                 
                 # Si falla por código duplicado, la imagen ya subida a Cloudinary DEBE eliminarse
                 if imagen_url and not eliminar_imagen_de_cloudinary(imagen_url):
@@ -284,7 +297,7 @@ def add_product():
 
     return redirect(url_for('admin'))
 
-# --- RUTA MODIFICADA: edit_product ---
+# --- RUTA DE EDICIÓN: edit_product ---
 @app.route('/edit_product/<product_id>', methods=('GET', 'POST'))
 def edit_product(product_id):
     
@@ -294,6 +307,7 @@ def edit_product(product_id):
         flash('ID de producto inválido.', 'error')
         return redirect(url_for('admin'))
 
+    # Se busca el producto original
     product = get_product(product_id)
 
     if product is None:
@@ -301,14 +315,15 @@ def edit_product(product_id):
         return redirect(url_for('admin'))
 
     if request.method == "POST":
-        codigo = request.form['codigo']
-        nombre = request.form['nombre']
-        descripcion = request.form['descripcion']
+        codigo = request.form['codigo'].strip()
+        nombre = request.form['nombre'].strip()
+        descripcion = request.form['descripcion'].strip()
         precio = request.form['precio']
         imagen_url = product['imagen_url'] # URL antigua
         new_imagen_url = None
 
         file = request.files.get('image')
+        # Lógica de subida de nueva imagen
         if file and file.filename != '':
             new_imagen_url = subir_imagen_a_cloudinary(file)
             
@@ -320,7 +335,6 @@ def edit_product(product_id):
                 imagen_url = new_imagen_url # Usar la nueva URL
         
         conn = get_db_connection()
-        # Se crea un cursor
         cur = conn.cursor()
         try:
             # 2. Actualizar la DB
@@ -350,19 +364,20 @@ def edit_product(product_id):
     # Para el método GET, retornamos el template
     return render_template('edit_product.html', producto=product)
 
-# --- RUTA MODIFICADA: delete_product ---
+# --- RUTA DE ELIMINACIÓN: delete_product ---
 @app.route('/delete_product/<int:product_id>', methods=('POST',))
 def delete_product(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
-    # Se crea un cursor
     cur = conn.cursor()
     
     if product:
         try:
-            if product['imagen_url']:
+            # 1. Eliminar imagen de Cloudinary
+            if product.get('imagen_url'):
                 eliminar_imagen_de_cloudinary(product['imagen_url'])
             
+            # 2. Eliminar registro de DB
             cur.execute('DELETE FROM productos WHERE id = %s', (product_id,))
             conn.commit()
             flash('El producto se ha eliminado correctamente.', 'success')
@@ -374,18 +389,18 @@ def delete_product(product_id):
         finally:
             conn.close()
             
+    # Redirigir, manteniendo los parámetros de búsqueda y paginación
     return redirect(url_for('admin', q=request.args.get('q'), page=request.args.get('page')))
 
 
-# --- RUTA MODIFICADA: delete_image ---
+# --- RUTA DE ELIMINACIÓN DE IMAGEN: delete_image ---
 @app.route('/delete_image/<int:product_id>', methods=['POST'])
 def delete_image(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
-    # Se crea un cursor
     cur = conn.cursor()
     
-    if product and product['imagen_url']:
+    if product and product.get('imagen_url'):
         try:
             # 1. Eliminar la imagen de Cloudinary
             if eliminar_imagen_de_cloudinary(product['imagen_url']):
@@ -407,7 +422,7 @@ def delete_image(product_id):
     
     return redirect(url_for('edit_product', product_id=product_id))
 
-# --- RUTA DE IMPORTACIÓN (MODIFICADA para psycopg2) ---
+# --- RUTA DE IMPORTACIÓN (Lógica de CSV y DB) ---
 @app.route('/importar_productos', methods=('POST',))
 def importar_productos():
     if 'csv_file' not in request.files:
@@ -423,14 +438,13 @@ def importar_productos():
     conn = None
     try:
         conn = get_db_connection()
-        # Se crea un cursor
         cur = conn.cursor()
         
-        # ... (Lógica de CSV se mantiene) ...
-        stream = io.TextIOWrapper(file.stream, encoding='cp1252')
+        # Se usa 'cp1252' o 'latin-1' para archivos CSV comunes en sistemas Windows de Latam
+        stream = io.TextIOWrapper(file.stream, encoding='cp1252', errors='replace')
         reader = csv.reader(stream)
         
-        next(reader, None) 
+        next(reader, None) # Saltar el encabezado
         
         total_importados = 0
         total_duplicados = 0
@@ -442,9 +456,10 @@ def importar_productos():
             try:
                 codigo = row[0].strip()
                 nombre = row[1].strip() 
-                descripcion = '' 
-
-                precio_str = row[3].strip().replace('$', '').replace(',', '')
+                descripcion = row[2].strip() if len(row) > 2 else '' 
+                
+                # Limpieza de precio: elimina $, comas y espacios, luego convierte a float
+                precio_str = row[3].strip().replace('$', '').replace(',', '').replace('.', '')
                 precio = float(precio_str)
                 imagen_url = None 
 
@@ -454,37 +469,43 @@ def importar_productos():
                 total_importados += 1
                 
             except ValueError:
-                # El precio no es un número válido
-                conn.rollback()
+                # El precio no es un número válido (ej. fila vacía o mal formato)
+                # No hacemos rollback aquí, permitimos que el loop continúe
+                print(f"Advertencia de Valor: Salteando fila con código '{row[0]}' por error de precio.")
                 continue
             except psycopg2.errors.UniqueViolation:
                 # Código duplicado
-                conn.rollback()
+                conn.rollback() # Rollback de la última inserción fallida
                 total_duplicados += 1
                 continue 
+            except Exception as e:
+                # Otros errores de DB o procesamiento
+                conn.rollback()
+                print(f"Error desconocido en fila '{row[0]}': {e}")
+                continue
         
-        conn.commit()
+        conn.commit() # Commit final de todas las inserciones exitosas
         flash(f'¡Importación finalizada! Productos añadidos: {total_importados}. Productos duplicados omitidos: {total_duplicados}.', 'success')
         
     except Exception as e:
         flash(f'Error durante la importación: {e}', 'error')
-        print(f'Error de importación: {e}')
+        print(f'Error de importación general: {e}')
     finally:
         if conn:
             conn.close()
 
     return redirect(url_for('admin'))
     
-# --- RUTA MODIFICADA: upload_product_image (Subida rápida) ---
+# --- RUTA DE SUBIDA RÁPIDA: upload_product_image ---
 @app.route('/upload_image/<int:product_id>', methods=['POST'])
 def upload_product_image(product_id):
     search_query = request.args.get('q', '')
     current_page = request.args.get('page', 1)
+    # Definir la redirección de administración para evitar repetición
     redirect_to_admin = redirect(url_for('admin', q=search_query, page=current_page))
     
     conn = get_db_connection()
     product = get_product(product_id)
-    # Se crea un cursor
     cur = conn.cursor()
     
     if not product:
@@ -492,17 +513,12 @@ def upload_product_image(product_id):
         flash('Producto no encontrado.', 'error')
         return redirect_to_admin
 
-    if 'image_file' not in request.files:
+    if 'image_file' not in request.files or request.files['image_file'].filename == '':
         conn.close()
         flash('No se seleccionó ningún archivo.', 'error')
         return redirect_to_admin
 
     file = request.files['image_file']
-
-    if file.filename == '':
-        conn.close()
-        flash('No se seleccionó ningún archivo.', 'error')
-        return redirect_to_admin
 
     # --- Lógica principal de subida ---
     new_imagen_url = subir_imagen_a_cloudinary(file) 
@@ -528,7 +544,7 @@ def upload_product_image(product_id):
             eliminar_imagen_de_cloudinary(new_imagen_url)
     else:
         conn.close()
-        flash('Error al procesar la imagen subida.', 'error')
+        flash('Error al procesar la imagen subida (Cloudinary).', 'error')
 
     # Redirigir manteniendo los parámetros
     return redirect_to_admin
