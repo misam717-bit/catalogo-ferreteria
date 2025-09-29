@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request, url_for, flash, redirect
-# NO USAMOS sqlite3 en Render
 # Se importa el driver de PostgreSQL
 import psycopg2 
 from psycopg2 import sql 
+# IMPORTACIÓN CRÍTICA: Necesario para usar el cursor de diccionario (DictCursor)
+import psycopg2.extras 
 import os
 import secrets
 import csv
@@ -20,8 +21,6 @@ import cloudinary.api
 load_dotenv()
 
 # --- CONFIGURACIÓN DE FLASK ---
-# La variable DATABASE ya no apunta a un archivo, se usa la variable de entorno
-# DATABASE = 'catalogo.db' 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'una_clave_secreta_fuerte')
 
@@ -49,13 +48,20 @@ def get_db_connection():
     try:
         # Se obtiene la cadena de conexión de las variables de entorno de Render
         db_url = os.environ.get("DATABASE_URL")
+        
         if not db_url:
             raise ValueError("DATABASE_URL no está configurada.")
+        
+        # FIX: Limpiar la URL de cualquier espacio o comilla indeseada
+        db_url = db_url.strip().strip('"').strip("'")
             
-        # Conexión a PostgreSQL
+        # Conexión a PostgreSQL. En psycopg2 se usa el parámetro 'cursor_factory' 
+        # para que los resultados se devuelvan como diccionarios (DictCursor).
         conn = psycopg2.connect(db_url)
-        # Permite acceder a las columnas por nombre (como si fuera sqlite3.Row)
-        conn.row_factory = psycopg2.extras.DictCursor 
+        
+        # IMPORTANTE: Para la mayoría de las operaciones (como init_db, commit/rollback)
+        # usamos la conexión simple, y luego creamos cursores específicos (DictCursor)
+        # en cada función de manejo de datos (get_product, index, admin, etc.)
         return conn
         
     except Exception as e:
@@ -66,13 +72,13 @@ def get_db_connection():
 def init_db():
     """
     Inicializa el esquema de la base de datos.
-    ADVERTENCIA: PostgreSQL no usa AUTOINCREMENT ni PRAGMA.
     """
+    # No es necesario usar DictCursor en init_db porque no estamos leyendo datos.
     conn = get_db_connection()
     
     # 1. Crear la tabla 'productos' si no existe
-    # Se reemplaza INTEGER PRIMARY KEY AUTOINCREMENT por SERIAL PRIMARY KEY
-    # Se eliminó el comentario de línea (#) dentro de la cadena SQL para evitar el error 'unrecognized token: "#"'
+    # Se utiliza sql.SQL() para una sintaxis segura en psycopg2
+    # El comentario fue eliminado en el commit anterior (símbolo #)
     conn.execute(sql.SQL("""
         CREATE TABLE IF NOT EXISTS productos (
             id SERIAL PRIMARY KEY,
@@ -84,27 +90,22 @@ def init_db():
         );
     """))
     
-    # 2. CREAR UN ÍNDICE ÚNICO para la columna 'codigo' 
-    # (aunque SERIAL PRIMARY KEY ya lo garantiza, se mantiene para consistencia y códigos externos)
-    # Se usa UNIQUE en la definición de la tabla para el código.
-
-    # 3. Crear la tabla FTS (Aquí debemos usar el módulo pg_trgm de Postgres, no fts5 de SQLite)
-    # Render ya tiene PostgreSQL configurado, pero no podemos crear tablas VIRTUALES FTS5.
-    # Por ahora, para simplificar el despliegue y evitar errores, ELIMINAMOS el bloque FTS y sus triggers.
-    # La búsqueda FTS se gestionará directamente en Python con LIKE o con un índice en el futuro.
-    
     conn.commit()
     conn.close()
 
 # Asegurar que la DB se inicializa con el schema correcto
 with app.app_context():
+    # La llamada a init_db ahora usa el get_db_connection corregido
     init_db()
 
 # Nueva función auxiliar para buscar productos por código (psycopg2)
 def get_product_by_codigo(codigo):
     conn = get_db_connection()
+    # USANDO DICTCURSOR: Esto permite que product sea un objeto tipo diccionario
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     # Se usa la sintaxis de %s para psycopg2 en lugar de ?
-    product = conn.execute('SELECT * FROM productos WHERE codigo = %s', (codigo,)).fetchone()
+    cur.execute('SELECT * FROM productos WHERE codigo = %s', (codigo,))
+    product = cur.fetchone()
     conn.close()
     # Si el producto existe, retornamos un objeto que se comporta como Row (DictCursor)
     return dict(product) if product else None
@@ -112,14 +113,16 @@ def get_product_by_codigo(codigo):
 # Función auxiliar para obtener producto por ID (psycopg2)
 def get_product(product_id):
     conn = get_db_connection()
-    product = conn.execute('SELECT * FROM productos WHERE id = %s', (product_id,)).fetchone()
+    # USANDO DICTCURSOR
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute('SELECT * FROM productos WHERE id = %s', (product_id,))
+    product = cur.fetchone()
     conn.close()
     return dict(product) if product else None
 
 
 # --- FUNCIÓN REESCRITA PARA CLOUDINARY (se mantiene intacta) ---
 def subir_imagen_a_cloudinary(file, public_id_prefix=None):
-    # ... (Se mantiene intacta la lógica de Cloudinary) ...
     if file and file.filename:
         try:
             upload_result = cloudinary.uploader.upload(
@@ -139,7 +142,6 @@ def subir_imagen_a_cloudinary(file, public_id_prefix=None):
 
 # --- FUNCIÓN REESCRITA PARA CLOUDINARY (se mantiene intacta) ---
 def eliminar_imagen_de_cloudinary(imagen_url):
-    # ... (Se mantiene intacta la lógica de Cloudinary) ...
     if not imagen_url:
         return True
     
@@ -170,17 +172,21 @@ def eliminar_imagen_de_cloudinary(imagen_url):
 @app.route('/')
 def index():
     conn = get_db_connection()
+    # USANDO DICTCURSOR
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     # Ejecuta SQL y obtiene todos los productos
-    conn.execute('SELECT * FROM productos ORDER BY id DESC')
-    productos = conn.fetchall()
+    cur.execute('SELECT * FROM productos ORDER BY id DESC')
+    productos = cur.fetchall()
     conn.close()
-    return render_template('index.html', productos=productos)
+    return render_template('index.html', productos=[dict(row) for row in productos])
 
 
 # --- RUTA DE ADMINISTRACIÓN (MODIFICADA: Búsqueda simple con LIKE) ---
 @app.route('/admin')
 def admin():
     conn = get_db_connection()
+    # USANDO DICTCURSOR
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     
     page = request.args.get('page', 1, type=int)
     search_query = request.args.get('q', '').strip() 
@@ -201,15 +207,15 @@ def admin():
         
     # Consulta para obtener el total de productos (con o sin filtro)
     count_query = 'SELECT COUNT(id) FROM productos' + where_clause
-    conn.execute(count_query, query_params)
-    total_productos = conn.fetchone()[0]
+    cur.execute(count_query, query_params)
+    total_productos = cur.fetchone()[0]
     
     # Consulta para obtener los productos de la página actual
     productos_query = 'SELECT * FROM productos' + where_clause + order_clause + ' LIMIT %s OFFSET %s'
     productos_params = query_params + [PRODUCTS_PER_PAGE, offset]
     
-    conn.execute(productos_query, productos_params)
-    productos = conn.fetchall()
+    cur.execute(productos_query, productos_params)
+    productos = cur.fetchall()
     conn.close()
 
     # 3. Calcular la información de paginación
@@ -252,13 +258,12 @@ def add_product():
             flash('El nombre y el precio son requeridos.', 'error')
         else:
             conn = get_db_connection()
-            
-            # La verificación de código duplicado ya ocurre implícitamente en la DB
-            # por el UNIQUE INDEX. Lo dejamos en un TRY/EXCEPT.
+            # NO USAMOS DictCursor aquí, solo estamos insertando
+            cur = conn.cursor()
 
             try:
                 # Se usa %s para psycopg2 en lugar de ?
-                conn.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
+                cur.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
                             (codigo, nombre, descripcion, precio, imagen_url))
                 conn.commit()
                 flash('El producto se ha agregado correctamente.', 'success')
@@ -319,9 +324,11 @@ def edit_product(product_id):
                 imagen_url = new_imagen_url # Usar la nueva URL
         
         conn = get_db_connection()
+        # NO USAMOS DictCursor aquí, solo estamos actualizando
+        cur = conn.cursor()
         try:
             # 2. Actualizar la DB
-            conn.execute('UPDATE productos SET codigo = %s, nombre = %s, descripcion = %s, precio = %s, imagen_url = %s WHERE id = %s',
+            cur.execute('UPDATE productos SET codigo = %s, nombre = %s, descripcion = %s, precio = %s, imagen_url = %s WHERE id = %s',
                         (codigo, nombre, descripcion, precio, imagen_url, product_id))
             conn.commit()
             flash('El producto se ha actualizado correctamente.', 'success')
@@ -352,13 +359,15 @@ def edit_product(product_id):
 def delete_product(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
+    # NO USAMOS DictCursor aquí, solo estamos eliminando
+    cur = conn.cursor()
     
     if product:
         try:
             if product['imagen_url']:
                 eliminar_imagen_de_cloudinary(product['imagen_url'])
             
-            conn.execute('DELETE FROM productos WHERE id = %s', (product_id,))
+            cur.execute('DELETE FROM productos WHERE id = %s', (product_id,))
             conn.commit()
             flash('El producto se ha eliminado correctamente.', 'success')
             
@@ -377,13 +386,15 @@ def delete_product(product_id):
 def delete_image(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
+    # NO USAMOS DictCursor aquí, solo estamos actualizando
+    cur = conn.cursor()
     
     if product and product['imagen_url']:
         try:
             # 1. Eliminar la imagen de Cloudinary
             if eliminar_imagen_de_cloudinary(product['imagen_url']):
                 # 2. Actualizar la DB para eliminar la URL
-                conn.execute('UPDATE productos SET imagen_url = NULL WHERE id = %s', (product_id,))
+                cur.execute('UPDATE productos SET imagen_url = NULL WHERE id = %s', (product_id,))
                 conn.commit()
                 flash('La foto del producto ha sido eliminada.', 'success')
             else:
@@ -400,13 +411,9 @@ def delete_image(product_id):
     
     return redirect(url_for('edit_product', product_id=product_id))
 
-# --- RUTA DE REINICIO DE DB (ELIMINADA) ---
-# Hemos eliminado esta ruta porque no podemos eliminar la base de datos de Render.
-
 # --- RUTA DE IMPORTACIÓN (MODIFICADA para psycopg2) ---
 @app.route('/importar_productos', methods=('POST',))
 def importar_productos():
-    # ... código de importación ... 
     if 'csv_file' not in request.files:
         flash('No se ha seleccionado ningún archivo.', 'error')
         return redirect(url_for('admin'))
@@ -420,6 +427,8 @@ def importar_productos():
     conn = None
     try:
         conn = get_db_connection()
+        # NO USAMOS DictCursor aquí, solo estamos insertando
+        cur = conn.cursor()
         
         # ... (Lógica de CSV se mantiene) ...
         stream = io.TextIOWrapper(file.stream, encoding='cp1252')
@@ -444,7 +453,7 @@ def importar_productos():
                 imagen_url = None 
 
                 # Insertar en PostgreSQL
-                conn.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
+                cur.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
                             (codigo, nombre, descripcion, precio, imagen_url))
                 total_importados += 1
                 
@@ -473,13 +482,14 @@ def importar_productos():
 # --- RUTA MODIFICADA: upload_product_image (Subida rápida) ---
 @app.route('/upload_image/<int:product_id>', methods=['POST'])
 def upload_product_image(product_id):
-    # ... (Lógica de subida rápida con las funciones de psycopg2) ...
     search_query = request.args.get('q', '')
     current_page = request.args.get('page', 1)
     redirect_to_admin = redirect(url_for('admin', q=search_query, page=current_page))
     
     conn = get_db_connection()
     product = get_product(product_id)
+    # NO USAMOS DictCursor aquí, solo estamos actualizando
+    cur = conn.cursor()
     
     if not product:
         conn.close()
@@ -508,7 +518,7 @@ def upload_product_image(product_id):
                 eliminar_imagen_de_cloudinary(product['imagen_url'])
             
             # 2. Actualizar la base de datos con la nueva URL de Cloudinary
-            conn.execute("UPDATE productos SET imagen_url = %s WHERE id = %s", (new_imagen_url, product_id))
+            cur.execute("UPDATE productos SET imagen_url = %s WHERE id = %s", (new_imagen_url, product_id))
             conn.commit()
             conn.close()
             
