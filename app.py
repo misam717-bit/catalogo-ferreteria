@@ -1,14 +1,15 @@
-import os
-from flask import Flask, render_template, request, url_for, flash, redirect
+# --- Importaciones de base y librerías ---
+import csv
+import io
 # Se importa el driver de PostgreSQL
 import psycopg2 
 from psycopg2 import sql 
 # IMPORTACIÓN CRÍTICA: Necesario para usar el cursor de diccionario (DictCursor)
 import psycopg2.extras 
 import secrets
-import csv
-import io
 import math 
+import os
+from flask import Flask, render_template, request, url_for, flash, redirect
 # Librería para cargar variables de entorno
 from dotenv import load_dotenv
 
@@ -437,58 +438,94 @@ def importar_productos():
 
     conn = None
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
-        
-        # Se usa 'cp1252' o 'latin-1' para archivos CSV comunes en sistemas Windows de Latam
-        stream = io.TextIOWrapper(file.stream, encoding='cp1252', errors='replace')
+        # Decodificación recomendada para manejar archivos de Windows (cp1252 o utf-8)
+        # Usamos io.TextIOWrapper para manejar la decodificación durante la lectura
+        # Usaremos 'utf-8' como principal, si falla, puede intentar 'cp1252' o 'latin-1'
+        try:
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8', errors='replace')
+            stream.readline() # Leer una línea para detectar el BOM si existe y posicionar el cursor
+            stream.seek(0) # Volver al inicio después de la lectura de prueba
+
+            # Si la línea leída contiene el BOM, lo eliminamos.
+            # Sin embargo, el problema principal es la codificación del archivo, no el stream.
+            # Mantendremos la lectura normal y dejamos que el csv.reader maneje el contenido
+            
+        except UnicodeDecodeError:
+            # Si UTF-8 falla, intenta con cp1252 (común en Excel en español)
+             stream = io.TextIOWrapper(file.stream, encoding='cp1252', errors='replace')
+
         reader = csv.reader(stream)
         
-        next(reader, None) # Saltar el encabezado
+        # FIX BOM en el header: Intentamos leer y limpiar el primer elemento del primer row si el BOM persistió
+        header_row = next(reader, None)
+        if header_row and header_row[0].startswith('\ufeff'): # \ufeff es el BOM
+            header_row[0] = header_row[0].lstrip('\ufeff')
         
-        total_importados = 0
-        total_duplicados = 0
-
+        # No hacemos nada con el header_row, simplemente lo saltamos si existía.
+        
+        datos_a_insertar = []
+        total_filas = 0
+        
+        # --- 1. PREPARACIÓN DE DATOS (Rápida y en memoria) ---
         for row in reader:
-            if len(row) < 4:
-                continue
+            total_filas += 1
+            # Se requiere un mínimo de 4 columnas (código, nombre, descripción, precio)
+            if len(row) < 4: 
+                continue # Salta filas incompletas
 
             try:
-                codigo = row[0].strip()
+                # El .strip() elimina cualquier espacio y potencial BOM si se filtró
+                codigo = row[0].strip().lstrip('\ufeff') # Limpieza explícita de BOM en código
                 nombre = row[1].strip() 
+                # Aseguramos que la descripción sea un string, aunque esté vacía
                 descripcion = row[2].strip() if len(row) > 2 else '' 
                 
-                # Limpieza de precio: elimina $, comas y espacios, luego convierte a float
-                precio_str = row[3].strip().replace('$', '').replace(',', '').replace('.', '')
+                # Limpieza de precio: elimina $, comas, puntos (si son separadores de miles)
+                precio_str = row[3].strip().replace('$', '').replace(',', '')
+                # Intenta convertir a float, si falla, usa 0.0
                 precio = float(precio_str)
-                imagen_url = None 
-
-                # Insertar en PostgreSQL
-                cur.execute('INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) VALUES (%s, %s, %s, %s, %s)',
-                            (codigo, nombre, descripcion, precio, imagen_url))
-                total_importados += 1
+                imagen_url = None # Por defecto no hay imagen
+                
+                # Agregar la tupla de datos a la lista
+                datos_a_insertar.append((codigo, nombre, descripcion, precio, imagen_url))
                 
             except ValueError:
-                # El precio no es un número válido (ej. fila vacía o mal formato)
-                # No hacemos rollback aquí, permitimos que el loop continúe
-                print(f"Advertencia de Valor: Salteando fila con código '{row[0]}' por error de precio.")
-                continue
-            except psycopg2.errors.UniqueViolation:
-                # Código duplicado
-                conn.rollback() # Rollback de la última inserción fallida
-                total_duplicados += 1
+                # Ignorar filas con precio inválido, pero seguir procesando
+                print(f"Advertencia de Valor: Salteando fila {total_filas} con código '{row[0]}' por error de precio.")
                 continue 
             except Exception as e:
-                # Otros errores de DB o procesamiento
-                conn.rollback()
-                print(f"Error desconocido en fila '{row[0]}': {e}")
+                print(f"Error desconocido en fila {total_filas} con código '{row[0]}': {e}")
                 continue
+
+        # --- 2. CONEXIÓN Y BULK INSERT (Una sola operación de DB) ---
+        if not datos_a_insertar:
+            flash('El archivo CSV no contenía productos válidos para importar.', 'warning')
+            return redirect(url_for('admin'))
+            
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Consulta SQL con ON CONFLICT DO NOTHING (evita duplicados sin fallar)
+        sql_insert = """
+            INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url) 
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (codigo) DO NOTHING;
+        """
         
-        conn.commit() # Commit final de todas las inserciones exitosas
-        flash(f'¡Importación finalizada! Productos añadidos: {total_importados}. Productos duplicados omitidos: {total_duplicados}.', 'success')
+        # Ejecuta la inserción masiva: esto resolverá el timeout.
+        cur.executemany(sql_insert, datos_a_insertar)
+        
+        total_insertados = cur.rowcount
+        total_duplicados = len(datos_a_insertar) - total_insertados
+
+        conn.commit() # Commit único
+        
+        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Productos duplicados omitidos: {total_duplicados}.', 'success')
         
     except Exception as e:
-        flash(f'Error durante la importación: {e}', 'error')
+        if 'conn' in locals() and conn:
+            conn.rollback()
+        flash(f'Error grave durante la importación: {e}', 'error')
         print(f'Error de importación general: {e}')
     finally:
         if conn:
