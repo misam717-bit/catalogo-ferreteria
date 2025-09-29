@@ -1,0 +1,21 @@
+Entorno virtual de Python
+venv/
+
+Archivos de base de datos local
+*.db
+*.sqlite3
+catalogo.db
+
+Variables de entorno secretas (¡MUY IMPORTANTE!)
+CLAVES DE CLOUDINARY.env
+.env
+
+Archivos temporales o de caché
+pycache/
+*.pyc
+*.csv.bak
+*.xlsx
+*.exe
+
+Carpeta de subidas locales (ya que ahora usas Cloudinary)
+static/uploads/

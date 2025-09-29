@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1000, initial-scale=1.0" />
+    <title>Panel de Administración</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* --- PALETA DE COLORES DE FERRETERÍA: AMARILLO (#FFD700) y NEGRO (#1A1A1A) --- */
+        body { 
+            font-family: Arial, sans-serif; 
+            background-color: #f4f7f9; /* Fondo muy claro */
+            color: #1a1a1a; /* Texto principal oscuro */
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        /* ENCABEZADO NEGRO Y TITULOS EN AMARILLO */
+        header { 
+            background: #1a1a1a; 
+            color: white; 
+            padding: 15px 20px; 
+            margin-bottom: 20px; 
+            border-radius: 0 0 8px 8px; /* Borde inferior redondeado */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        header h1 { 
+            color: #ffd700; /* Título en amarillo */
+            margin: 0; 
+            display: inline-block; 
+        }
+
+        .warning-text { color: #dc3545; font-weight: bold; margin-bottom: 10px; }
+        
+        /* SECCIONES EN BLANCO */
+        .admin-form-section, .admin-table-section, .admin-db-section, .admin-import-section, .admin-search-section {
+            background: #fff;
+            padding: 20px;
+            margin-bottom: 25px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .action-buttons a, .action-buttons button { margin-right: 5px; }
+        .product-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; }
+        .button { 
+            padding: 10px 15px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            text-decoration: none;
+            display: inline-block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .button:hover { opacity: 0.9; }
+        
+        /* --- BOTONES ESPECÍFICOS --- */
+        .reset-db-button { background-color: #dc3545; color: white; } /* Rojo (Peligro) */
+        
+        /* EDICIÓN Y AGREGAR AHORA EN AMARILLO */
+        .edit-button, .add-button { 
+            background-color: #ffd700; 
+            color: #1a1a1a; 
+        } 
+        .edit-button:hover, .add-button:hover { 
+            background-color: #e5c300; 
+        }
+
+        .delete-button { background-color: #dc3545; color: white; } /* Rojo (Eliminar) */
+        
+        /* Botón de acción principal: Importar (AMARILLO) */
+        .import-button { background-color: #ffd700; color: #1a1a1a; } 
+        /* Botón Ir al Catálogo (NEGRO) */
+        .header-link-button { background-color: #1a1a1a; color: white; }
+        
+        /* Botón de búsqueda (GRIS OSCURO) */
+        .search-button { background-color: #6c757d; color: white; }
+        .clear-search-button { background-color: #adb5bd; color: white; }
+
+
+        /* Estilos de la tabla */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
+        th { background-color: #e9ecef; color: #1a1a1a; } /* Fondo gris claro en encabezados */
+        
+        /* Mensajes Flash */
+        .flashes li { 
+            list-style: none; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            border-radius: 4px; 
+            color: white;
+            font-weight: bold;
+        }
+        .flashes li:not([class*="error"]) { background-color: #28a745; } /* Éxito (Verde) */
+        .flashes li[class*="error"] { background-color: #f44336; } /* Error (Rojo) */
+
+        /* Estilos de paginación */
+        .pagination { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
+        .pagination a, .pagination span {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            transition: background-color 0.2s;
+        }
+        .pagination a:hover {
+            background-color: #ffd700; /* Hover en amarillo */
+        }
+        .pagination .current-page {
+            background-color: #1a1a1a; /* Página actual en negro */
+            color: #ffd700; /* Número de página en amarillo */
+            border-color: #1a1a1a;
+            font-weight: bold;
+        }
+        
+        /* --- ESTILOS DEL SPINNER (Básico) --- */
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #ffd700; /* El color de carga en amarillo */
+            animation: spin 1s ease infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>Panel de Administración</h1>
+            <a href="{{ url_for('index') }}" class="button header-link-button">Ir al Catálogo</a>
+        </div>
+    </header>
+
+    <main class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                <ul class="flashes">
+                    {% for category, message in messages %}
+                        <li {% if category == 'error' %}class="error"{% endif %}>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+
+        <section class="admin-form-section">
+            <h2>1. Agregar Nuevo Producto</h2>
+            <form action="{{ url_for('add_product') }}" method="post" enctype="multipart/form-data">
+                
+                <label for="codigo">Código (Interno):</label>
+                <input type="text" id="codigo" name="codigo">
+                
+                <label for="nombre">Nombre:</label>
+                <input type="text" id="nombre" name="nombre" required>
+                
+                <label for="descripcion">Descripción:</label>
+                <textarea id="descripcion" name="descripcion"></textarea>
+                
+                <label for="precio">Precio de Venta:</label>
+                <input type="number" id="precio" name="precio" step="0.01" required>
+                
+                <label for="image">Imagen:</label>
+                <input type="file" id="image" name="image" accept="image/*">
+                
+                <button type="submit" class="button add-button">Agregar Producto</button>
+            </form>
+        </section>
+        
+        <section class="admin-search-section">
+            <h2>2. Búsqueda y Filtrado</h2>
+            <form id="search-form" action="{{ url_for('admin') }}" method="get" style="display: flex; gap: 10px; align-items: center;">
+                <label for="q">Buscar por Código o Nombre:</label>
+                <input type="search" id="q" name="q" value="{{ search_query if search_query }}" 
+                        placeholder="Ingresa código o nombre..." 
+                        style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1;">
+                <button type="submit" class="button search-button">Buscar</button>
+                {% if search_query %}
+                    <a href="{{ url_for('admin') }}" class="button clear-search-button">Limpiar Búsqueda</a>
+                {% endif %}
+            </form>
+        </section>
+
+        <section class="admin-table-section">
+    {% if search_query %}
+        <h2>3. Resultados de Búsqueda ({{ total_productos }} encontrados)</h2>
+    {% else %}
+        <h2>3. Productos Existentes ({{ total_productos }} en total)</h2>
+    {% endif %}
+    
+    <div id="loading-spinner" style="display: none; text-align: center; padding: 30px;">
+        <div class="spinner"></div>
+        <p style="color: #6c757d; font-weight: bold; margin-top: 15px;">Buscando productos, por favor espera...</p>
+    </div>
+    
+    {% if not productos and not search_query %}
+        <p style="color: #666;">Aún no hay productos en la base de datos.</p>
+    {% elif not productos and search_query %}
+        <p style="color: #666;">No se encontraron productos que coincidan con la búsqueda.</p>
+    {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Código</th>
+                    <th>Nombre</th>
+                    <th>Precio Venta</th>
+                    <th>Foto Rápida</th> 
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for producto in productos %}
+                <tr>
+                    <td data-label="ID">{{ producto.id }}</td>
+                    <td data-label="Código">{{ producto.codigo if producto.codigo else 'N/A' }}</td>
+                    <td data-label="Nombre">{{ producto.nombre }}</td>
+                    <td data-label="Precio">${{ "%.2f"|format(producto.precio) }}</td>
+                    
+                    <td data-label="Foto Rápida">
+                        <form action="{{ url_for('upload_product_image', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}" 
+                            method="post" 
+                            enctype="multipart/form-data" 
+                            style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+                            {% if producto.imagen_url %}
+                                <img src="{{ url_for('static', filename=producto.imagen_url) }}" alt="{{ producto.nombre }}" class="product-thumb">
+                            {% else %}
+                                <span style="font-size: 10px;">Sin foto</span>
+                            {% endif %}
+                            <label for="image-{{ producto.id }}" class="button edit-button" style="padding: 5px 10px; cursor: pointer; margin: 0; font-size: 12px;">
+                                Subir Foto
+                            </label>
+                            <input type="file" 
+                                name="image_file" 
+                                id="image-{{ producto.id }}" 
+                                accept="image/*" 
+                                capture="environment" 
+                                onchange="this.form.submit()" 
+                                style="display: none;">
+                        </form>
+                    </td>
+                    <td data-label="Acciones" class="action-buttons">
+                        <a href="{{ url_for('edit_product', product_id=producto.id) }}" class="edit-button button">Editar Datos</a>
+                        <form action="{{ url_for('delete_product', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este producto?');" style="display: inline;">
+                            <button type="submit" class="delete-button button">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+                
+                <div class="pagination">
+                    
+                    {# Botón Anterior #}
+                    {% if current_page > 1 %}
+                        <a href="{{ url_for('admin', page=current_page - 1, q=search_query) }}">&laquo; Anterior</a>
+                    {% else %}
+                        <span style="opacity: 0.5;">&laquo; Anterior</span>
+                    {% endif %}
+
+                    {# Enlaces de Página #}
+                    {% for p in pages %}
+                        {% if p == current_page %}
+                            <span class="current-page">{{ p }}</span>
+                        {% elif p > 0 and p <= total_pages %}
+                            <a href="{{ url_for('admin', page=p, q=search_query) }}">{{ p }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {# Botón Siguiente #}
+                    {% if current_page < total_pages %}
+                        <a href="{{ url_for('admin', page=current_page + 1, q=search_query) }}">Siguiente &raquo;</a>
+                    {% else %}
+                        <span style="opacity: 0.5;">Siguiente &raquo;</span>
+                    {% endif %}
+                    
+                    {# Indicador de total de páginas (si hay muchas) #}
+                    {% if total_pages > 5 and current_page < total_pages - 2 %}
+                        <span style="border: none;">... {{ total_pages }}</span>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </section>
+        
+        <section class="admin-db-section">
+            <h2>4. Herramientas</h2>
+            <form action="{{ url_for('reiniciar_db') }}" method="get" onsubmit="return confirm('¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará todos los datos.');" style="display: inline;">
+                <button type="submit" class="button reset-db-button">Reiniciar Base de Datos</button>
+            </form>
+        </section>
+
+        <section class="admin-import-section">
+            <h2>5. Importar Productos por CSV</h2>
+            <form action="{{ url_for('importar_productos') }}" method="post" enctype="multipart/form-data">
+                <p class="warning-text">
+                    ¡ATENCIÓN! Esta acción **NO BORRARÁ** productos. Solo **AÑADIRÁ** productos nuevos y **OMITIRÁ** duplicados basándose en el campo **CÓDIGO**.
+                </p>
+                <label for="csv_file">Seleccionar archivo CSV (Codificación cp1252):</label>
+                <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
+                <button type="submit" class="button import-button">Importar Productos</button>
+                <p>
+                    **El CSV debe tener las columnas en este orden:**<br>
+                    1. Código | 2. Nombre del Producto | 3. Precio de Costo (Ignorar) | 4. **Precio de Venta**
+                </p>
+            </form>
+        </section>
+        
+    </main>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchForm = document.getElementById('search-form');
+            const spinner = document.getElementById('loading-spinner');
+
+            if (searchForm) {
+                // Captura el evento de envío del formulario de búsqueda
+                searchForm.addEventListener('submit', function() {
+                    // Muestra el spinner
+                    spinner.style.display = 'block';
+
+                    // Oculta la tabla o el mensaje de resultados
+                    const tableSection = document.querySelector('.admin-table-section');
+                    if (tableSection) {
+                        // Oculta el contenido de la sección de resultados para que solo se vea el spinner
+                        const contentToHide = tableSection.querySelectorAll('h2, table, p:not(#loading-spinner p), .pagination');
+                        contentToHide.forEach(el => el.style.display = 'none');
+                        
+                        // Asegura que el spinner esté visible
+                        spinner.style.display = 'block';
+                    }
+                    
+                    // Opcional: Deshabilitar el campo y el botón para evitar doble click
+                    const searchInput = searchForm.querySelector('input[name="q"]');
+                    const searchButton = searchForm.querySelector('button[type="submit"]');
+
+                    if (searchInput) searchInput.disabled = true;
+                    if (searchButton) searchButton.disabled = true;
+                });
+            }
+        });
+    </script>
+</body>
+</html>

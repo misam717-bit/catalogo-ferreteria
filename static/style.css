@@ -1,0 +1,677 @@
+:root {
+--primary-color: #1A1A1A; 
+--secondary-color: #555;
+--accent-color: #FFD700;  
+--background-color: #e5e9ec;  
+--background-color: #FF7F00;
+--card-background: #c8c8c8;
+--border-color: #ddd;
+--text-color: #333;
+--shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+line-height: 1.6;
+color: var(--text-color);
+background-color: var(--background-color); /* Usa el nuevo color de fondo */
+}
+
+.container {
+max-width: 1200px;
+margin: 0 auto;
+padding: 20px;
+width: 100%;
+}
+
+header {
+/* El header usa el negro principal */
+background: var(--primary-color);
+color: #fff;
+padding: 20px 0;
+text-align: center;
+box-shadow: 0 2px 4px var(--shadow-color);
+display: flex;
+justify-content: center;
+align-items: center;
+}
+
+header .container { /* Permitimos que los elementos dentro del header se envuelvan si no caben */
+display: flex;
+justify-content: space-between;
+align-items: center;
+flex-wrap: wrap; 
+}
+
+
+.header-logo {
+height: 40px; /* Tamaño reducido en general */
+width: auto;
+margin-right: 10px; /* Menos margen */
+border-radius: 5px;
+}
+
+
+header h1 {
+font-size: 2.5rem;
+color: var(--accent-color); /* Título en amarillo */
+margin: 0;
+/* CORRECCIÓN: Evitar que el título se encoja forzadamente en pantallas pequeñas */
+flex-shrink: 0;
+}
+
+/* Botones genéricos (Usado para Volver y Añadir al Carrito) */
+.button, .add-to-cart-btn {
+/* Usa el negro principal con texto blanco, o el amarillo si es un botón de acción clave */
+background: var(--primary-color);
+color: #fff;
+padding: 10px 15px;
+border: none;
+border-radius: 5px;
+text-decoration: none;
+cursor: pointer;
+font-size: 1rem;
+transition: background-color 0.3s ease;
+}
+
+.button:hover, .add-to-cart-btn:hover {
+background: #333; /* Un gris oscuro para hover */
+}
+
+/* Catálogo de productos */
+.products-grid {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+gap: 20px;
+padding-top: 20px;
+grid-auto-rows: 1fr;
+width: 100%;
+}
+
+.product-card {
+background: var(--card-background);
+border-radius: 10px;
+box-shadow: 0 4px 8px var(--shadow-color);
+overflow: hidden;
+transition: transform 0.2s;
+text-align: center;
+display: flex;
+flex-direction: column;
+}
+
+.product-card:hover {
+transform: translateY(-5px);
+}
+
+.product-card img {
+width: 100%;
+height: 250px;
+object-fit: cover;
+}
+
+.product-card h3 {
+margin: 15px 10px 5px;
+font-size: 1.25rem;
+}
+
+.product-card .description {
+color: var(--secondary-color);
+font-size: 0.9rem;
+padding: 0 10px;
+flex-grow: 1;
+}
+
+.product-card .price {
+font-size: 1.5rem;
+font-weight: bold;
+color: var(--accent-color); /* Precio en amarillo */
+margin: 10px 0;
+}
+
+.product-card .add-to-cart-btn {
+background: var(--accent-color); /* Botón de carrito en amarillo */
+color: var(--primary-color); /* Texto en negro */
+margin: 10px;
+}
+.product-card .add-to-cart-btn:hover {
+background: #e5c300;
+}
+
+/* Panel de administración y Edición */
+.admin-form-section, .admin-table-section, .admin-db-section {
+background: var(--card-background);
+padding: 20px;
+border-radius: 10px;
+box-shadow: 0 4px 8px var(--shadow-color);
+margin-bottom: 20px;
+}
+
+.admin-table-section {
+overflow-x: auto;
+}
+
+.admin-form-section h2, .admin-table-section h2 {
+margin-bottom: 20px;
+text-align: center;
+color: var(--primary-color); /* Títulos de sección en negro */
+}
+
+.admin-form-section form {
+display: flex;
+flex-direction: column;
+gap: 15px;
+}
+
+.admin-form-section label {
+font-weight: bold;
+}
+
+.admin-form-section input, .admin-form-section textarea {
+width: 100%;
+padding: 10px;
+border: 1px solid var(--border-color);
+border-radius: 5px;
+font-size: 1rem;
+}
+
+.form-image-group {
+padding-top: 5px;
+padding-bottom: 5px;
+border: 1px dashed var(--border-color);
+border-radius: 5px;
+text-align: center;
+}
+
+.form-image-group h4 {
+margin-bottom: 10px;
+color: var(--secondary-color);
+}
+
+table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
+    th { background-color: #e9ecef; color: #1a1a1a; } /* Fondo gris claro en encabezados */
+
+    /* Centra el contenido en la columna de la foto rápida */
+    td[data-label="Foto Rápida"] {
+        text-align: center;
+    }
+
+th, td {
+padding: 12px;
+text-align: left;
+border-bottom: 1px solid var(--border-color);
+white-space: nowrap;
+}
+
+th {
+background-color: var(--primary-color); /* Encabezado de tabla en negro */
+color: var(--accent-color); /* Texto en amarillo */
+}
+
+ .product-thumb { 
+        width: 60px; /* Incrementado para mejor visibilidad y espacio para el botón */
+        height: 60px; 
+        object-fit: cover; 
+        border-radius: 4px; 
+        margin-bottom: 5px; /* Pequeño espacio con el botón de subir */
+    }
+
+.action-buttons {
+display: flex;
+gap: 5px;
+align-items: center;
+justify-content: center;
+flex-wrap: nowrap;
+min-width: 130px;
+}
+
+.edit-button, .delete-button {
+padding: 6px 10px;
+border-radius: 5px;
+text-decoration: none;
+color: white;
+font-size: 0.85rem;
+white-space: nowrap;
+box-sizing: border-box;
+flex-shrink: 0;
+}
+
+/* === BOTONES DE ACCIÓN ESPECÍFICOS PARA EL PANEL === */
+
+/* Botón Editar (Amarillo) */
+.edit-button {
+background-color: var(--accent-color);
+color: var(--primary-color); /* Texto negro en botón amarillo */
+border: none;
+}
+.edit-button:hover {
+background-color: #e5c300;
+}
+
+/* Botón de Eliminar (Rojo) */
+.delete-button, .delete-image-button {
+background-color: #e74c3c; /* Rojo de peligro */
+border: none;
+cursor: pointer;
+text-decoration: none;
+}
+.delete-button:hover, .delete-image-button:hover {
+background-color: #c0392b;
+}
+
+/* Estilo para el botón de "Actualizar Producto" en la página de edición */
+/* Dado que edit_product.html usa solo '.button', lo hacemos amarillo para acción principal */
+.admin-form-section .button[type="submit"] {
+background: var(--accent-color);
+color: var(--primary-color);
+font-weight: bold;
+padding: 12px 20px;
+margin-top: 15px;
+}
+
+.admin-form-section .button[type="submit"]:hover {
+background: #e5c300;
+}
+
+.flashes {
+list-style: none;
+padding: 15px;
+margin-bottom: 20px;
+background-color: #e8f5e9;
+color: #2e7d32;
+border: 1px solid #c8e6c9;
+border-radius: 5px;
+}
+
+.reset-db-button {
+background-color: #e74c3c;
+color: white;
+margin-top: 20px;
+display: block;
+}
+
+.reset-db-button:hover {
+background-color: #c0392b;
+}
+
+/* Carrito de compra (Modal) */
+.cart-icon {
+font-size: 1.2rem;
+cursor: pointer;
+display: flex;
+align-items: center;
+gap: 5px;
+color: white;
+transition: transform 0.2s ease;
+}
+
+.cart-icon:hover {
+transform: scale(1.1);
+}
+
+.modal {
+display: none;
+position: fixed;
+z-index: 10;
+left: 0;
+top: 0;
+width: 100%;
+height: 100%;
+background-color: rgba(0,0,0,0.6);
+justify-content: center;
+align-items: center;
+}
+
+.modal-content {
+background-color: #fefefe;
+padding: 30px;
+border-radius: 10px;
+width: 90%;
+max-width: 500px;
+box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+position: relative;
+max-height: 80vh;
+overflow-y: auto;
+}
+
+.close-button {
+color: var(--secondary-color);
+font-size: 28px;
+font-weight: bold;
+position: absolute;
+top: 10px;
+right: 15px;
+cursor: pointer;
+}
+
+.close-button:hover, .close-button:focus {
+color: #000;
+}
+
+#cart-items-list {
+list-style-type: none;
+margin-top: 20px;
+}
+
+#cart-items-list li {
+display: flex;
+justify-content: space-between;
+align-items: center;
+padding: 10px 0;
+border-bottom: 1px solid var(--border-color);
+}
+
+.cart-total {
+margin-top: 20px;
+font-size: 1.5rem;
+font-weight: bold;
+color: var(--accent-color);
+text-align: right;
+}
+
+.clear-cart-btn {
+width: 100%;
+margin-top: 20px;
+background-color: #e74c3c;
+border: none;
+color: white;
+padding: 15px;
+border-radius: 5px;
+cursor: pointer;
+}
+
+.clear-cart-btn:hover {
+background-color: #c0392b;
+}
+
+/* --- SECCIÓN DE IMAGEN ACTUAL EN EDITAR PRODUCTO (MEJORADA) --- */
+.current-image {
+margin-top: 20px;
+text-align: center;
+padding: 20px; /* Añade relleno interno */
+background: var(--card-background); /* Fondo blanco */
+border: 1px solid var(--border-color); /* Borde sutil */
+border-radius: 10px;
+box-shadow: 0 2px 4px var(--shadow-color); /* Sombra ligera */
+display: flex;
+flex-direction: column;
+align-items: center; /* Centra el contenido verticalmente */
+gap: 10px; /* Espacio entre elementos */
+}
+
+.current-image h4 {
+margin-bottom: 5px;
+color: var(--primary-color);
+font-weight: bold;
+}
+
+.current-image img {
+max-width: 200px;
+height: auto;
+border-radius: 8px; /* Bordes redondeados */
+margin-bottom: 5px;
+border: 1px solid var(--border-color); /* Marco para la imagen */
+padding: 5px;
+box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.delete-image-button {
+/* El estilo base ya está en .delete-button, aquí aseguramos que se vea bien como un bloque */
+display: block;
+width: 100%;
+max-width: 250px; /* Limitar el ancho para que no sea demasiado grande en desktop */
+margin: 10px auto 0 auto; /* Centrar y añadir margen superior */
+padding: 10px 15px;
+font-size: 1rem;
+font-weight: bold;
+}
+/* --- FIN SECCIÓN DE IMAGEN ACTUAL --- */
+
+/* --- ESTILO WHATSAPP --- */
+.whatsapp-btn {
+background-color: #25D366 !important; /* Verde de WhatsApp */
+transition: background-color 0.3s ease;
+width: 100%;
+margin-top: 20px;
+padding: 15px;
+}
+
+.whatsapp-btn:hover {
+background-color: #128C7E !important;
+}
+/* --- FIN NUEVO ESTILO WHATSAPP --- */
+
+/* --- ESTILOS PARA EL MODAL DE ZOOM (AÑADIDOS) --- */
+/* El Modal de Imagen (fondo negro) */
+#image-modal {
+    display: none; /* Oculto por defecto */
+    position: fixed; 
+    z-index: 1000; /* Asegura que esté encima de todo */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.9); 
+}
+
+/* Contenido del Modal (la imagen) */
+#zoomed-image {
+    margin: auto;
+    display: block;
+    width: 80%;
+    max-width: 700px;
+    position: absolute; /* Para centrar la imagen */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    /* Animación opcional */
+    animation-name: zoom;
+    animation-duration: 0.6s;
+}
+
+/* Botón de cerrar */
+#close-image-modal {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #f1f1f1;
+    /* CAMBIO REALIZADO AQUÍ: Aumento a 70px para mejor usabilidad */
+    font-size: 70px; 
+    font-weight: bold;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: 0.3s;
+}
+
+#close-image-modal:hover, #close-image-modal:focus {
+    color: #bbb;
+    opacity: 1;
+}
+
+/* Animación de entrada */
+@keyframes zoom {
+    from {transform: translate(-50%, -50%) scale(0.1)} 
+    to {transform: translate(-50%, -50%) scale(1)}
+}
+/* --- FIN ESTILOS PARA EL MODAL DE ZOOM --- */
+
+
+/* ==================================== */
+/* RESPONSIVE / MOBILE      */
+/* ==================================== */
+@media (max-width: 600px) {
+.container {
+padding: 10px;
+}
+
+/* En móviles, aseguramos que el logo y el h1 ocupen la primera línea y el search bar caiga abajo */
+header .container {
+ /* Se sobrescribe la configuración de 'flex-direction: column' anterior para esta vista */
+ flex-direction: row; 
+ flex-wrap: wrap; /* CORRECCIÓN: Permite que elementos grandes pasen a la siguiente línea */
+ justify-content: space-between;
+}
+
+.header-logo {
+ height: 35px; /* Tamaño más pequeño en móvil */
+ order: 1; /* Posición: Primero */
+}
+
+header h1 {
+ font-size: 1.8rem;
+ order: 2; /* Posición: Segundo */
+ margin-left: auto; /* Empuja el título hacia la derecha junto al carrito */
+}
+
+.cart-icon {
+ order: 3; /* Posición: Tercero */
+ margin-left: 10px;
+}
+
+.search-bar {
+ order: 4; /* Posición: Cuarto (pasa a la línea de abajo) */
+ width: 100%;
+ margin: 10px 0 0 0; /* Espacio para que se separe de la línea superior */
+}
+
+.button, .add-to-cart-btn {
+ padding: 8px 12px;
+ font-size: 0.9rem;
+}
+
+.product-card img {
+ height: 200px;
+}
+
+.product-card h3 {
+ font-size: 1.1rem;
+}
+
+.product-card .price {
+ font-size: 1.3rem;
+}
+
+.modal-content {
+ width: 95%;
+ padding: 20px;
+}
+
+/* OCULTAR EL ENCABEZADO DE LA TABLA COMPLETA EN MÓVIL */
+.admin-table-section thead {
+ display: none;
+}
+
+/* HACER QUE CADA FILA (TR) SE COMPORTE COMO UN BLOQUE/TARJETA */
+.admin-table-section table,
+.admin-table-section tbody,
+.admin-table-section tr {
+ display: block;
+ width: 100%;
+}
+
+/* ESTILO PARA las "TARJETAS" DE PRODUCTO */
+.admin-table-section tr {
+ margin-bottom: 15px;
+ border: 1px solid var(--border-color);
+ border-radius: 8px;
+ padding: 10px;
+ box-shadow: 0 2px 4px var(--shadow-color);
+ background: var(--card-background);
+}
+
+/* HACER QUE CADA CELDA (TD) SE COMPORTE COMO UN PAR ETIQUETA-VALOR */
+.admin-table-section td {
+ border-bottom: none;
+ position: relative;
+ padding-left: 50%; /* Espacio para la etiqueta */
+ text-align: right;
+ display: block;
+ white-space: normal; /* Permitir que el contenido se envuelva */
+}
+
+/* AÑADIR LAS ETIQUETAS USANDO PSEUDO-ELEMENTOS (requiere data-label en el HTML) */
+.admin-table-section td::before {
+ content: attr(data-label);
+ position: absolute;
+ left: 10px;
+ width: calc(50% - 20px);
+ padding-right: 10px;
+ white-space: nowrap;
+ text-align: left;
+ color: var(--primary-color);
+}
+
+/* ESTILO ESPECÍFICO PARA LA IMAGEN */
+.admin-table-section td:nth-child(4) { /* Columna de Imagen */
+ text-align: center;
+ padding-left: 10px;
+}
+
+/* ESTILO ESPECÍFICO PARA LOS BOTONES DE ACCIÓN */
+.action-buttons {
+ justify-content: space-evenly; /* Distribuye los botones en la tarjeta */
+ margin-top: 10px;
+ padding: 10px 0;
+ border-top: 1px solid var(--border-color);
+}
+
+}
+
+/* Estilos para que la barra de búsqueda se vea bien */
+.search-bar {
+margin-bottom: 20px;
+max-width: 600px;
+margin-left: auto;
+margin-right: auto;
+padding: 10px 0;
+}
+
+.search-bar input[type="text"] {
+width: 100%;
+padding: 10px 15px;
+border: 1px solid #ccc;
+border-radius: 5px;
+font-size: 16px;
+box-sizing: border-box;
+}
+
+/* Ajuste para pantallas más grandes (Escritorio) */
+@media (min-width: 768px) {
+header .container {
+flex-direction: row;
+justify-content: space-between;
+align-items: center;
+flex-wrap: nowrap; /* Deshabilitamos el wrap en escritorio */
+}
+
+/* Orden de elementos en escritorio: Logo + Título | Search Bar | Carrito */
+.header-logo, header h1 {
+order: 1; 
+ /* Usamos un div invisible o ajustamos la alineación en el HTML para que estén juntos */
+}
+.search-bar {
+order: 2;
+ flex-grow: 1; 
+ max-width: 400px;
+ margin: 0 20px;
+}
+.cart-icon {
+ order: 3;
+ flex-shrink: 0;
+}
+
+/* Juntamos el Logo y el Título para que se vean como un grupo de marca */
+.header-logo + h1 {
+ margin-left: 0; 
+}
+
+}
+.floating-btn {
+  /* ... (código anterior) ... */
+  width: 200px; /* AUMENTADO */
+  height: 200px; /* AUMENTADO */
+  /* ... (código intermedio) ... */
+  font-size: 5.5em; /* AUMENTADO para que la flecha ↑ se vea más grande */
+  /* ... (código final) ... */
+}

@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1000, initial-scale=1.0" />
+    <title>Catálogo de Productos</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+    <style>
+      /* --- PALETA DE COLORES DE FERRETERÍA: AMARILLO (#FFD700) y NEGRO (#1A1A1A) --- */
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4; /* Fondo claro */
+        color: #1a1a1a; /* Texto principal oscuro */
+        margin: 0;
+        padding: 0;
+      }
+
+      /* CABECERA Y ENCABEZADOS */
+      header {
+        background: #1a1a1a; /* Fondo negro */
+        color: white;
+        padding: 15px 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        justify-content: center;
+        width: 100%;
+        position: sticky; /* HACE QUE EL ENCABEZADO SEA PEGADIZO */
+        top: 0;
+        z-index: 10;
+      }
+      header h1 {
+        color: #ffd700; /* Título en amarillo */
+        margin: 0;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .cart-icon {
+        cursor: pointer;
+        font-size: 1.1em;
+        font-weight: bold;
+        color: #ffd700; /* Icono del carrito en amarillo */
+      }
+      
+      /* TARJETAS DE PRODUCTO */
+      .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+      }
+      .product-card {
+        background: #ffffff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 15px;
+        text-align: center;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s;
+      }
+      .product-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      .product-card img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 4px;
+        margin-bottom: 10px;
+        cursor: pointer; 
+      }
+      
+      /* PRECIO Y CÓDIGO */
+      .product-card .price {
+        font-size: 1.6em;
+        font-weight: bold;
+        color: #1a1a1a; /* Precio en negro para máxima legibilidad */
+        margin: 10px 0;
+      }
+      .product-code {
+        color: #666;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+      }
+      
+      /* BOTÓN DE AGREGAR AL CARRITO (Acción principal) */
+      .add-to-cart-btn {
+        background-color: #ffd700; /* AMARILLO PRINCIPAL */
+        color: #1a1a1a; /* Texto negro para buen contraste en el botón amarillo */
+        border: none;
+        padding: 10px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1em;
+        font-weight: bold;
+        transition: background-color 0.2s, transform 0.2s;
+        width: 100%;
+      }
+      .add-to-cart-btn:hover {
+        background-color: #e5c300; /* Un poco más oscuro al pasar el ratón */
+        transform: scale(1.02);
+      }
+      
+      /* ESTILOS DEL MODAL (CARRITO) */
+      .modal {
+          display: none; 
+          position: fixed; 
+          z-index: 1; 
+          left: 0;
+          top: 0;
+          width: 100%; 
+          height: 100%; 
+          overflow: auto; 
+          background-color: rgba(0,0,0,0.4); 
+      }
+      .close-button {
+          color: #aaa;
+          float: right;
+          font-size: 28px;
+          font-weight: bold;
+          cursor: pointer;
+      }
+      .close-button:hover,
+      .close-button:focus {
+          color: #000;
+          text-decoration: none;
+      }
+      .modal-content {
+        background-color: #fff;
+        border-radius: 10px;
+        padding: 30px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        max-width: 500px;
+        margin: 10% auto;
+      }
+      .whatsapp-btn {
+        background-color: #25d366; /* Verde WhatsApp */
+        color: white;
+        margin-top: 15px;
+        width: 100%;
+      }
+      .clear-cart-btn {
+        background-color: #dc3545; /* Rojo para vaciar */
+        color: white;
+        margin-top: 10px;
+        width: 100%;
+      }
+      .description {
+        display: none;
+      }
+
+      /* --- ESTILOS PARA EL MODAL DE ZOOM --- */
+      #image-modal {
+          display: none; 
+          position: fixed; 
+          z-index: 1000; 
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          overflow: auto; 
+          background-color: rgba(0,0,0,0.9); 
+      }
+      #zoomed-image {
+          margin: auto;
+          display: block;
+          width: 80%;
+          max-width: 700px;
+          position: absolute; 
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          animation-name: zoom;
+          animation-duration: 0.6s;
+      }
+      #close-image-modal {
+          position: absolute;
+          top: 15px;
+          right: 35px;
+          color: #f1f1f1;
+          font-size: 70px; 
+          font-weight: bold;
+          cursor: pointer;
+          opacity: 0.7;
+          transition: 0.3s;
+      }
+      #close-image-modal:hover, #close-image-modal:focus {
+          color: #bbb;
+          opacity: 1;
+      }
+      @keyframes zoom {
+          from {transform: translate(-50%, -50%) scale(0.1)} 
+          to {transform: translate(-50%, -50%) scale(1)}
+      }
+
+      /* --- ESTILOS PARA BOTONES FLOTANTES (FÍJOS) --- */
+      .floating-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 99;
+        /* --- TAMAÑO DEL BOTÓN AUMENTADO --- */
+        width: 200px; 
+        height: 200px;
+        /* ----------------------------------- */
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        transition: opacity 0.3s, background-color 0.3s, transform 0.3s;
+        /* --- TAMAÑO DEL ÍCONO AUMENTADO --- */
+        font-size: 5.5em;
+        /* ----------------------------------- */
+        font-weight: bold;
+      }
+      .floating-btn:hover {
+        transform: scale(1.1);
+      }
+
+      /* Botón de "Volver Arriba" (flecha) */
+      #back-to-top-btn {
+        background-color: #1a1a1a; /* Negro de la Ferretería */
+        color: white;
+        display: none; 
+      }
+      
+      /* Botón de Carrito Flotante (OPCIONAL - Oculto por defecto para evitar duplicidad) */
+      #floating-cart-btn {
+        background-color: #ffd700; /* Amarillo */
+        color: #1a1a1a;
+        right: 100px; /* Ajustado por el nuevo tamaño */
+        display: none; 
+      }
+    </style>
+</head>
+<body>
+    <header>
+      <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
+        
+        <img src="static/logo nea.jpg" alt="Logo de la Ferretería Nea" class="header-logo" style="max-height: 40px; margin-right: 15px;"> 
+        <h1>Catálogo de Productos</h1>
+        
+
+        <div class="search-bar" style="flex-grow: 1; margin: 0 20px;">
+          <p style="width: 100%; text-align: center; font-size: 0.85rem; color: #FFD700; margin: 5px 0 0 0;">
+            Precios sujetos a cambio sin previo aviso.
+          </p>
+          <form id="search-form" action="#" method="get">
+            <input
+              type="search" 
+              id="search-input"
+              placeholder="Buscar productos por nombre..."
+              aria-label="Buscar productos"
+              style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #333; color: white;"
+            />
+            <button type="submit" style="display: none">Buscar</button>
+          </form>
+            
+        </div>
+        <!-- ICONO DEL CARRITO EN LA CABECERA (EXISTENTE) -->
+        <div class="cart-icon" id="cart-icon">
+          🛒 Carrito (<span id="cart-count">0</span>)
+        </div>
+      </div>
+    </header>
+    <div class="container" style="text-align: center; margin-top: 15px; margin-bottom: 5px;">
+        <p style="font-size: 1rem; color: #1a1a1a; margin-bottom: 10px; font-weight: 500;">
+            ¿No encuentras lo que buscas? ¡Te ayudamos!
+        </p>
+        <a 
+            href="https://wa.me/525521908413?text=Hola buen dia estoy buscando un producto y me gustaría saber si lo pueden conseguir..." 
+            class="button whatsapp-btn" 
+            style="padding: 10px 20px; width: auto; display: inline-block;"
+            target="_blank"
+        >
+            Preguntar por WhatsApp 💬
+        </a>
+    </div>
+    
+    <main class="container">
+      <section class="products-grid">
+        {% for producto in productos %}
+        <div class="product-card" data-nombre="{{ producto.nombre | lower }}">
+            <div onclick="openImageModal('{{ url_for('static', filename=producto.imagen_url) if producto.imagen_url else 'https://placehold.co/400x400/CCCCCC/333333?text=Sin+Imagen' }}')">
+                {% if producto.imagen_url %}
+                <img
+                    src="{{ url_for('static', filename=producto.imagen_url) }}"
+                    alt="{{ producto.nombre }}"
+                />
+                {% else %}
+                <img
+                    src="https://placehold.co/400x400/CCCCCC/333333?text=Sin+Imagen"
+                    alt="Sin imagen"
+                />
+                {% endif %}
+            </div>
+            <h3>{{ producto.nombre }}</h3>
+
+            {% if producto.codigo %}
+            <p class="product-code">
+                Código: {{ producto.codigo }}
+            </p>
+            {% endif %}
+
+            {% if producto.descripcion %}
+            <p class="description">
+                {{ producto.descripcion }}
+            </p>
+            {% endif %}
+
+            <p class="price">${{ "%.2f"|format(producto.precio) }}</p>
+            <button
+                class="add-to-cart-btn"
+                data-id="{{ producto.id }}"
+                data-nombre="{{ producto.nombre }}"
+                data-precio="{{ producto.precio }}"
+            >
+                Agregar al carrito
+            </button>
+        </div>
+        {% endfor %}
+      </section>
+    </main>
+    
+    <!-- BOTÓN FLOTANTE "VOLVER ARRIBA" -->
+    <button id="back-to-top-btn" class="floating-btn" title="Volver arriba">↑</button>
+
+    <!-- BOTÓN FLOTANTE CARRITO (Opcional, desactivado por defecto) -->
+    <button id="floating-cart-btn" class="floating-btn" title="Ver Carrito">🛒</button>
+
+
+    <!-- MODALES -->
+    <div id="image-modal" class="modal">
+        <span class="close-button" id="close-image-modal">&times;</span>
+        <img class="modal-content-img" id="zoomed-image">
+    </div>
+    <div id="cart-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-button" id="close-cart-button">&times;</span>
+        <h2>Tu Carrito</h2>
+        <ul id="cart-items-list"></ul>
+        <p class="cart-total">
+          Total: $<span id="cart-total-price">0.00</span>
+        </p>
+
+        <button id="whatsapp-order-btn" class="button whatsapp-btn">
+          Ordenar por WhatsApp 💬
+        </button>
+
+        <button class="clear-cart-btn button">Vaciar Carrito</button>
+      </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="{{ url_for('static', filename='carrito.js') }}"></script>
+    <script>
+        // --- FUNCIONES Y LÓGICA GENERAL ---
+        
+        // Referencias a Modales
+        const imageModal = document.getElementById('image-modal');
+        const zoomedImage = document.getElementById('zoomed-image');
+        const closeImageModal = document.getElementById('close-image-modal');
+        const cartModal = document.getElementById('cart-modal');
+        const closeCartButton = document.getElementById('close-cart-button');
+
+        // Referencias a Botones Flotantes
+        const backToTopBtn = document.getElementById('back-to-top-btn');
+        const floatingCartBtn = document.getElementById('floating-cart-btn');
+
+        // Función para abrir el modal de imagen
+        function openImageModal(imageUrl) {
+            zoomedImage.src = imageUrl;
+            imageModal.style.display = "block";
+        }
+
+        // Cierra los modales con su 'X'
+        closeImageModal.onclick = function() {
+            imageModal.style.display = "none";
+        }
+        if (closeCartButton) {
+            closeCartButton.onclick = function() {
+                cartModal.style.display = "none";
+            }
+        }
+        
+        // Cierra los modales si el usuario hace clic en el fondo oscuro
+        window.onclick = function(event) {
+            if (event.target == imageModal) {
+                imageModal.style.display = "none";
+            }
+            if (event.target == cartModal) {
+                cartModal.style.display = "none";
+            }
+        }
+        // --- FIN DE FUNCIONES PARA MODALES ---
+
+
+        document.addEventListener("DOMContentLoaded", () => {
+          const searchInput = document.getElementById("search-input");
+          const productCards = document.querySelectorAll(".product-card");
+
+          // ABRIR MODAL DEL CARRITO AL HACER CLIC EN EL ICONO DE LA CABECERA
+          const cartIcon = document.getElementById("cart-icon");
+          if (cartIcon && cartModal) {
+              cartIcon.addEventListener("click", function () {
+                  cartModal.style.display = "block";
+              });
+          }
+          
+          // ABRIR MODAL DEL CARRITO AL HACER CLIC EN EL BOTÓN FLOTANTE (si está visible)
+          if (floatingCartBtn && cartModal) {
+              floatingCartBtn.addEventListener("click", function () {
+                  cartModal.style.display = "block";
+              });
+          }
+
+          // Función para realizar la búsqueda y filtrar las tarjetas
+          const filterProducts = (searchTerm) => {
+            const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
+
+            productCards.forEach((card) => {
+              const productName = card.getAttribute("data-nombre");
+
+              // Incluye el código del producto en la búsqueda para mejor filtrado
+              const productCodeElement = card.querySelector('.product-code');
+              const productCode = productCodeElement ? productCodeElement.textContent.toLowerCase() : '';
+
+              if (productName.includes(lowerCaseSearchTerm) || productCode.includes(lowerCaseSearchTerm)) {
+                card.style.display = ""; // Mostrar tarjeta
+              } else {
+                card.style.display = "none"; // Ocultar tarjeta
+              }
+            });
+          };
+
+          // Escuchar el evento 'input' para filtrar en tiempo real mientras se escribe
+          searchInput.addEventListener("input", (event) => {
+            filterProducts(event.target.value);
+          });
+
+          // Prevenir el envío del formulario si se presiona Enter, para que no recargue la página
+          document
+            .getElementById("search-form")
+            .addEventListener("submit", (event) => {
+              event.preventDefault();
+              filterProducts(searchInput.value);
+              searchInput.blur(); 
+            });
+            
+          // Si tienes una búsqueda inicial, ejecútala una vez cargada la página
+          if (searchInput.value) {
+              filterProducts(searchInput.value);
+          }
+          
+          // --- LÓGICA DEL BOTÓN VOLVER ARRIBA ---
+          
+          // Mostrar u ocultar el botón basado en la posición del scroll
+          window.onscroll = function() {
+            // Si el scroll vertical es mayor a 300px, muestra el botón.
+            if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+              backToTopBtn.style.display = "flex"; // Usar flex para centrar el contenido
+            } else {
+              backToTopBtn.style.display = "none";
+            }
+          };
+
+          // Función para hacer scroll suave hasta arriba
+          backToTopBtn.addEventListener("click", () => {
+              window.scrollTo({
+                  top: 0,
+                  behavior: 'smooth'
+              });
+          });
+          
+        });
+    </script>
+</body>
+</html>
