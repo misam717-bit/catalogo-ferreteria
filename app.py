@@ -72,7 +72,7 @@ def init_db():
     
     # 1. Crear la tabla 'productos' si no existe
     # Se reemplaza INTEGER PRIMARY KEY AUTOINCREMENT por SERIAL PRIMARY KEY
-    # Se elimina el comentario '#' dentro del SQL
+    # Se eliminó el comentario de línea (#) dentro de la cadena SQL para evitar el error 'unrecognized token: "#"'
     conn.execute(sql.SQL("""
         CREATE TABLE IF NOT EXISTS productos (
             id SERIAL PRIMARY KEY,
