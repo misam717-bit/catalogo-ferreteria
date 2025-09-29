@@ -243,7 +243,8 @@
     <header>
       <div class="container" style="display: flex; justify-content: space-between; align-items: center;">
         
-        <img src="static/logo nea.jpg" alt="Logo de la Ferretería Nea" class="header-logo" style="max-height: 40px; margin-right: 15px;"> 
+        <!-- Logo en la cabecera -->
+        <img src="{{ url_for('static', filename='logo nea.jpg') }}" alt="Logo de la Ferretería Nea" class="header-logo" style="max-height: 40px; margin-right: 15px;"> 
         <h1>Catálogo de Productos</h1>
         
 
@@ -287,19 +288,19 @@
       <section class="products-grid">
         {% for producto in productos %}
         <div class="product-card" data-nombre="{{ producto.nombre | lower }}">
-            <div onclick="openImageModal('{{ url_for('static', filename=producto.imagen_url) if producto.imagen_url else 'https://placehold.co/400x400/CCCCCC/333333?text=Sin+Imagen' }}')">
-                {% if producto.imagen_url %}
+            <!-- 
+            **MODIFICACIÓN CLAVE AQUÍ:**
+            Se asume que producto.imagen_url ahora contiene la URL COMPLETA de Cloudinary.
+            Ya NO usamos url_for('static', ...) de Flask para esta URL.
+            -->
+            {% set image_url = producto.imagen_url if producto.imagen_url else 'https://placehold.co/400x400/CCCCCC/333333?text=Sin+Imagen' %}
+            <div onclick="openImageModal('{{ image_url }}')">
                 <img
-                    src="{{ url_for('static', filename=producto.imagen_url) }}"
+                    src="{{ image_url }}"
                     alt="{{ producto.nombre }}"
                 />
-                {% else %}
-                <img
-                    src="https://placehold.co/400x400/CCCCCC/333333?text=Sin+Imagen"
-                    alt="Sin imagen"
-                />
-                {% endif %}
             </div>
+            
             <h3>{{ producto.nombre }}</h3>
 
             {% if producto.codigo %}
@@ -358,7 +359,8 @@
     </div>
 
     <!-- SCRIPTS -->
-    <script src="{{ url_for('static', filename='carrito.js') }}"></script>
+    <!-- Se asume que 'carrito.js' existe en la carpeta static/ -->
+    <script src="{{ url_for('static', filename='carrito.js') }}"></script> 
     <script>
         // --- FUNCIONES Y LÓGICA GENERAL ---
         
