@@ -55,13 +55,8 @@ def get_db_connection():
         # FIX: Limpiar la URL de cualquier espacio o comilla indeseada
         db_url = db_url.strip().strip('"').strip("'")
             
-        # Conexión a PostgreSQL. En psycopg2 se usa el parámetro 'cursor_factory' 
-        # para que los resultados se devuelvan como diccionarios (DictCursor).
+        # Conexión a PostgreSQL. 
         conn = psycopg2.connect(db_url)
-        
-        # IMPORTANTE: Para la mayoría de las operaciones (como init_db, commit/rollback)
-        # usamos la conexión simple, y luego creamos cursores específicos (DictCursor)
-        # en cada función de manejo de datos (get_product, index, admin, etc.)
         return conn
         
     except Exception as e:
@@ -73,13 +68,13 @@ def init_db():
     """
     Inicializa el esquema de la base de datos.
     """
-    # No es necesario usar DictCursor en init_db porque no estamos leyendo datos.
     conn = get_db_connection()
+    # *** FIX CRÍTICO: Se debe usar un cursor para ejecutar el SQL ***
+    cur = conn.cursor()
     
     # 1. Crear la tabla 'productos' si no existe
     # Se utiliza sql.SQL() para una sintaxis segura en psycopg2
-    # El comentario fue eliminado en el commit anterior (símbolo #)
-    conn.execute(sql.SQL("""
+    cur.execute(sql.SQL("""
         CREATE TABLE IF NOT EXISTS productos (
             id SERIAL PRIMARY KEY,
             codigo TEXT UNIQUE,
@@ -91,6 +86,7 @@ def init_db():
     """))
     
     conn.commit()
+    cur.close() # Opcional, pero buena práctica
     conn.close()
 
 # Asegurar que la DB se inicializa con el schema correcto
@@ -258,7 +254,7 @@ def add_product():
             flash('El nombre y el precio son requeridos.', 'error')
         else:
             conn = get_db_connection()
-            # NO USAMOS DictCursor aquí, solo estamos insertando
+            # Se crea un cursor
             cur = conn.cursor()
 
             try:
@@ -324,7 +320,7 @@ def edit_product(product_id):
                 imagen_url = new_imagen_url # Usar la nueva URL
         
         conn = get_db_connection()
-        # NO USAMOS DictCursor aquí, solo estamos actualizando
+        # Se crea un cursor
         cur = conn.cursor()
         try:
             # 2. Actualizar la DB
@@ -359,7 +355,7 @@ def edit_product(product_id):
 def delete_product(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
-    # NO USAMOS DictCursor aquí, solo estamos eliminando
+    # Se crea un cursor
     cur = conn.cursor()
     
     if product:
@@ -386,7 +382,7 @@ def delete_product(product_id):
 def delete_image(product_id):
     conn = get_db_connection()
     product = get_product(product_id)
-    # NO USAMOS DictCursor aquí, solo estamos actualizando
+    # Se crea un cursor
     cur = conn.cursor()
     
     if product and product['imagen_url']:
@@ -427,7 +423,7 @@ def importar_productos():
     conn = None
     try:
         conn = get_db_connection()
-        # NO USAMOS DictCursor aquí, solo estamos insertando
+        # Se crea un cursor
         cur = conn.cursor()
         
         # ... (Lógica de CSV se mantiene) ...
@@ -488,7 +484,7 @@ def upload_product_image(product_id):
     
     conn = get_db_connection()
     product = get_product(product_id)
-    # NO USAMOS DictCursor aquí, solo estamos actualizando
+    # Se crea un cursor
     cur = conn.cursor()
     
     if not product:
