@@ -539,12 +539,11 @@ def importar_productos():
         cur.copy_from(
             productos_limpios_csv, 
             'temp_productos', 
-            # FIX: Usar format='csv' para indicar a PostgreSQL el formato.
-            format='csv', 
+            # FIX CRÍTICO: Eliminar el argumento 'format' que no es aceptado por psycopg2.copy_from
+            # format='csv', # Eliminado 
             # IMPORTANTE: Aquí se especifica que son 5 columnas
             columns=('codigo', 'nombre', 'descripcion', 'precio', 'imagen_url'),
             sep=',', 
-            # FIX CRÍTICO: Quitar el argumento 'quote', no es aceptado por psycopg2.copy_from
         )
 
         # Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
