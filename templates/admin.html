@@ -2,17 +2,24 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=1000, initial-scale=1.0" />
+    <!-- CORRECCIÓN: Usar device-width para una correcta responsividad en móviles -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <title>Panel de Administración</title>
+    <!-- El enlace a style.css se mantiene, aunque el estilo principal esté en <style> -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
         /* --- PALETA DE COLORES DE FERRETERÍA: AMARILLO (#FFD700) y NEGRO (#1A1A1A) --- */
         body { 
-            font-family: Arial, sans-serif; 
+            font-family: 'Inter', Arial, sans-serif; 
             background-color: #f4f7f9; /* Fondo muy claro */
             color: #1a1a1a; /* Texto principal oscuro */
+            line-height: 1.6;
         }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 20px; 
+        }
         
         /* ENCABEZADO NEGRO Y TITULOS EN AMARILLO */
         header { 
@@ -20,16 +27,24 @@
             color: white; 
             padding: 15px 20px; 
             margin-bottom: 20px; 
-            border-radius: 0 0 8px 8px; /* Borde inferior redondeado */
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 0 0 8px 8px; 
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
         }
         header h1 { 
-            color: #ffd700; /* Título en amarillo */
+            color: #ffd700; 
             margin: 0; 
             display: inline-block; 
         }
 
-        .warning-text { color: #dc3545; font-weight: bold; margin-bottom: 10px; }
+        .warning-text { 
+            color: #dc3545; 
+            font-weight: bold; 
+            margin-bottom: 10px; 
+            border: 1px solid #dc3545;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #fcebeb;
+        }
         
         /* SECCIONES EN BLANCO */
         .admin-form-section, .admin-table-section, .admin-db-section, .admin-import-section, .admin-search-section {
@@ -37,24 +52,75 @@
             padding: 20px;
             margin-bottom: 25px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
         }
-        .action-buttons a, .action-buttons button { margin-right: 5px; }
-        .product-thumb { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; }
+        
+        /* ESTILOS DE FORMULARIO MEJORADOS */
+        .admin-form-section form, .admin-import-section form {
+            display: grid;
+            gap: 15px;
+            /* Dos columnas para desktop, una para móvil */
+            grid-template-columns: 1fr 1fr; 
+        }
+
+        .admin-form-section form button, .admin-import-section form button {
+            grid-column: span 2; /* Botones ocupan todo el ancho */
+            margin-top: 10px;
+        }
+
+        .admin-form-section label, .admin-import-section label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .admin-form-section input[type="text"], 
+        .admin-form-section input[type="number"], 
+        .admin-form-section textarea,
+        .admin-search-section input[type="search"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        .admin-form-section textarea {
+            grid-column: span 2; /* Descripción ocupa todo el ancho */
+            min-height: 100px;
+        }
+        .admin-form-section input:focus, .admin-search-section input:focus {
+            border-color: #ffd700;
+            box-shadow: 0 0 0 0.2rem rgba(255, 215, 0, 0.25);
+            outline: none;
+        }
+
+        @media (max-width: 768px) {
+            .admin-form-section form {
+                grid-template-columns: 1fr; /* Una columna en móvil */
+            }
+            .admin-form-section form button, .admin-import-section form button {
+                grid-column: span 1; 
+            }
+        }
+
+        /* ESTILOS DE BOTONES */
         .button { 
             padding: 10px 15px; 
             border: none; 
-            border-radius: 4px; 
+            border-radius: 6px; /* Ligeramente más redondeado */
             cursor: pointer; 
             text-decoration: none;
             display: inline-block;
-            margin-top: 10px;
             font-weight: bold;
+            text-align: center;
+            transition: background-color 0.2s, transform 0.1s;
         }
-        .button:hover { opacity: 0.9; }
+        .button:active { transform: translateY(1px); }
         
         /* --- BOTONES ESPECÍFICOS --- */
-        .reset-db-button { background-color: #dc3545; color: white; } /* Rojo (Peligro) */
+        .reset-db-button { background-color: #dc3545; color: white; } 
         
         /* EDICIÓN Y AGREGAR AHORA EN AMARILLO */
         .edit-button, .add-button { 
@@ -65,7 +131,7 @@
             background-color: #e5c300; 
         }
 
-        .delete-button { background-color: #dc3545; color: white; } /* Rojo (Eliminar) */
+        .delete-button { background-color: #dc3545; color: white; } 
         
         /* Botón de acción principal: Importar (AMARILLO) */
         .import-button { background-color: #ffd700; color: #1a1a1a; } 
@@ -75,21 +141,83 @@
         /* Botón de búsqueda (GRIS OSCURO) */
         .search-button { background-color: #6c757d; color: white; }
         .clear-search-button { background-color: #adb5bd; color: white; }
+        .search-button:hover { background-color: #5a6268; }
 
 
         /* Estilos de la tabla */
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 12px; border: 1px solid #eee; text-align: left; }
-        th { background-color: #e9ecef; color: #1a1a1a; } /* Fondo gris claro en encabezados */
+        table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 15px; border-radius: 8px; overflow: hidden; }
+        th, td { padding: 12px; border: none; text-align: left; }
+        th { background-color: #e9ecef; color: #1a1a1a; border-bottom: 2px solid #ccc; } 
+        
+        /* Estilo de filas */
+        tbody tr:nth-child(even) { background-color: #f8f9fa; }
+        tbody tr:hover { background-color: #fff3cd; } /* Resaltar en amarillo suave al pasar el mouse */
+        
+        /* Imagen de producto */
+        .product-thumb { 
+            width: 50px; 
+            height: 50px; 
+            object-fit: cover; 
+            border-radius: 4px; 
+            border: 1px solid #ccc;
+        }
+        
+        /* RESPONSIVIDAD DE LA TABLA: Transforma la tabla en tarjetas en móvil */
+        @media screen and (max-width: 768px) {
+            table { border: 0; }
+            table thead { display: none; }
+            table, tbody, tr, td { display: block; width: 100%; }
+            tr { margin-bottom: 15px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; }
+            td { 
+                border-bottom: 1px solid #eee; 
+                text-align: right; 
+                padding-left: 50%;
+                position: relative;
+            }
+            td:last-child { border-bottom: 0; }
+            td:before { 
+                content: attr(data-label);
+                position: absolute;
+                left: 10px;
+                width: 45%;
+                padding-right: 10px;
+                white-space: nowrap;
+                font-weight: bold;
+                color: #1a1a1a;
+            }
+            .action-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+                text-align: center;
+                align-items: center;
+            }
+            .action-buttons .button { width: 80%; }
+            
+            /* Ajuste para la columna de imagen/subida */
+            td[data-label="Foto Rápida"] {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding-left: 10px; /* Elimina el padding extra en móvil */
+                text-align: left;
+            }
+            td[data-label="Foto Rápida"] form {
+                flex-direction: row !important;
+                gap: 15px;
+            }
+        }
         
         /* Mensajes Flash */
+        .flashes { padding-left: 0; }
         .flashes li { 
             list-style: none; 
-            padding: 10px; 
-            margin-bottom: 10px; 
-            border-radius: 4px; 
+            padding: 12px 20px; 
+            margin-bottom: 15px; 
+            border-radius: 6px; 
             color: white;
             font-weight: bold;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         .flashes li:not([class*="error"]) { background-color: #28a745; } /* Éxito (Verde) */
         .flashes li[class*="error"] { background-color: #f44336; } /* Error (Rojo) */
@@ -104,24 +232,22 @@
             color: #333;
             transition: background-color 0.2s;
         }
-        .pagination a:hover {
-            background-color: #ffd700; /* Hover en amarillo */
-        }
+        .pagination a:hover { background-color: #ffd700; } 
         .pagination .current-page {
-            background-color: #1a1a1a; /* Página actual en negro */
-            color: #ffd700; /* Número de página en amarillo */
+            background-color: #1a1a1a; 
+            color: #ffd700; 
             border-color: #1a1a1a;
             font-weight: bold;
         }
         
-        /* --- ESTILOS DEL SPINNER (Básico) --- */
+        /* SPINNER */
         .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            width: 36px;
-            height: 36px;
+            border: 5px solid rgba(0, 0, 0, 0.1);
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            border-left-color: #ffd700; /* El color de carga en amarillo */
-            animation: spin 1s ease infinite;
+            border-left-color: #ffd700; 
+            animation: spin 1s linear infinite;
             margin: 0 auto;
         }
 
@@ -130,6 +256,48 @@
             100% { transform: rotate(360deg); }
         }
         
+        /* --- ESTILOS DEL MODAL DE CONFIRMACIÓN --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none; /* Oculto por defecto */
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-content h3 {
+            color: #dc3545;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .modal-content p {
+            margin-bottom: 30px;
+            color: #333;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: space-around;
+        }
+        .modal-actions .button {
+            width: 45%;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -155,20 +323,28 @@
             <h2>1. Agregar Nuevo Producto</h2>
             <form action="{{ url_for('add_product') }}" method="post" enctype="multipart/form-data">
                 
-                <label for="codigo">Código (Interno):</label>
-                <input type="text" id="codigo" name="codigo">
+                <div>
+                    <label for="codigo">Código (Interno):</label>
+                    <input type="text" id="codigo" name="codigo">
+                </div>
                 
-                <label for="nombre">Nombre:</label>
-                <input type="text" id="nombre" name="nombre" required>
+                <div>
+                    <label for="nombre">Nombre:</label>
+                    <input type="text" id="nombre" name="nombre" required>
+                </div>
                 
                 <label for="descripcion">Descripción:</label>
                 <textarea id="descripcion" name="descripcion"></textarea>
                 
-                <label for="precio">Precio de Venta:</label>
-                <input type="number" id="precio" name="precio" step="0.01" required>
+                <div>
+                    <label for="precio">Precio de Venta:</label>
+                    <input type="number" id="precio" name="precio" step="0.01" required>
+                </div>
                 
-                <label for="image">Imagen:</label>
-                <input type="file" id="image" name="image" accept="image/*">
+                <div>
+                    <label for="image">Imagen:</label>
+                    <input type="file" id="image" name="image" accept="image/*">
+                </div>
                 
                 <button type="submit" class="button add-button">Agregar Producto</button>
             </form>
@@ -180,7 +356,7 @@
                 <label for="q">Buscar por Código o Nombre:</label>
                 <input type="search" id="q" name="q" value="{{ search_query if search_query }}" 
                         placeholder="Ingresa código o nombre..." 
-                        style="padding: 8px; border: 1px solid #ccc; border-radius: 4px; flex-grow: 1;">
+                        style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px; flex-grow: 1;">
                 <button type="submit" class="button search-button">Buscar</button>
                 {% if search_query %}
                     <a href="{{ url_for('admin') }}" class="button clear-search-button">Limpiar Búsqueda</a>
@@ -189,74 +365,80 @@
         </section>
 
         <section class="admin-table-section">
-    {% if search_query %}
-        <h2>3. Resultados de Búsqueda ({{ total_productos }} encontrados)</h2>
-    {% else %}
-        <h2>3. Productos Existentes ({{ total_productos }} en total)</h2>
-    {% endif %}
-    
-    <div id="loading-spinner" style="display: none; text-align: center; padding: 30px;">
-        <div class="spinner"></div>
-        <p style="color: #6c757d; font-weight: bold; margin-top: 15px;">Buscando productos, por favor espera...</p>
-    </div>
-    
-    {% if not productos and not search_query %}
-        <p style="color: #666;">Aún no hay productos en la base de datos.</p>
-    {% elif not productos and search_query %}
-        <p style="color: #666;">No se encontraron productos que coincidan con la búsqueda.</p>
-    {% else %}
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Código</th>
-                    <th>Nombre</th>
-                    <th>Precio Venta</th>
-                    <th>Foto Rápida</th> 
-                    <th>Acciones</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for producto in productos %}
-                <tr>
-                    <td data-label="ID">{{ producto.id }}</td>
-                    <td data-label="Código">{{ producto.codigo if producto.codigo else 'N/A' }}</td>
-                    <td data-label="Nombre">{{ producto.nombre }}</td>
-                    <td data-label="Precio">${{ "%.2f"|format(producto.precio) }}</td>
-                    
-                    <td data-label="Foto Rápida">
-                        <form action="{{ url_for('upload_product_image', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}" 
-                            method="post" 
-                            enctype="multipart/form-data" 
-                            style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
-                            {% if producto.imagen_url %}
-                                <img src="{{ url_for('static', filename=producto.imagen_url) }}" alt="{{ producto.nombre }}" class="product-thumb">
-                            {% else %}
-                                <span style="font-size: 10px;">Sin foto</span>
-                            {% endif %}
-                            <label for="image-{{ producto.id }}" class="button edit-button" style="padding: 5px 10px; cursor: pointer; margin: 0; font-size: 12px;">
-                                Subir Foto
-                            </label>
-                            <input type="file" 
-                                name="image_file" 
-                                id="image-{{ producto.id }}" 
-                                accept="image/*" 
-                                capture="environment" 
-                                onchange="this.form.submit()" 
-                                style="display: none;">
-                        </form>
-                    </td>
-                    <td data-label="Acciones" class="action-buttons">
-                        <a href="{{ url_for('edit_product', product_id=producto.id) }}" class="edit-button button">Editar Datos</a>
-                        <form action="{{ url_for('delete_product', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}" method="post" onsubmit="return confirm('¿Estás seguro de que quieres eliminar este producto?');" style="display: inline;">
-                            <button type="submit" class="delete-button button">Eliminar</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-                
+            {% if search_query %}
+                <h2>3. Resultados de Búsqueda ({{ total_productos }} encontrados)</h2>
+            {% else %}
+                <h2>3. Productos Existentes ({{ total_productos }} en total)</h2>
+            {% endif %}
+            
+            <div id="loading-spinner" style="display: none; text-align: center; padding: 30px;">
+                <div class="spinner"></div>
+                <p style="color: #6c757d; font-weight: bold; margin-top: 15px;">Buscando productos, por favor espera...</p>
+            </div>
+            
+            {% if not productos and not search_query %}
+                <p style="color: #666;">Aún no hay productos en la base de datos.</p>
+            {% elif not productos and search_query %}
+                <p style="color: #666;">No se encontraron productos que coincidan con la búsqueda.</p>
+            {% else %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Código</th>
+                            <th>Nombre</th>
+                            <th>Precio Venta</th>
+                            <th>Foto Rápida</th> 
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for producto in productos %}
+                        <tr>
+                            <td data-label="ID">{{ producto.id }}</td>
+                            <td data-label="Código">{{ producto.codigo if producto.codigo else 'N/A' }}</td>
+                            <td data-label="Nombre">{{ producto.nombre }}</td>
+                            <td data-label="Precio">${{ "%.2f"|format(producto.precio) }}</td>
+                            
+                            <td data-label="Foto Rápida">
+                                <form action="{{ url_for('upload_product_image', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}" 
+                                    method="post" 
+                                    enctype="multipart/form-data" 
+                                    style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+                                    {% if producto.imagen_url %}
+                                        <img src="{{ url_for('static', filename=producto.imagen_url) }}" alt="{{ producto.nombre }}" class="product-thumb">
+                                    {% else %}
+                                        <span style="font-size: 10px; height: 50px; display: flex; align-items: center;">Sin foto</span>
+                                    {% endif %}
+                                    <label for="image-{{ producto.id }}" class="button edit-button" style="padding: 5px 10px; cursor: pointer; margin: 0; font-size: 12px;">
+                                        Subir Foto
+                                    </label>
+                                    <input type="file" 
+                                        name="image_file" 
+                                        id="image-{{ producto.id }}" 
+                                        accept="image/*" 
+                                        capture="environment" 
+                                        onchange="this.form.submit()" 
+                                        style="display: none;">
+                                </form>
+                            </td>
+                            <td data-label="Acciones" class="action-buttons">
+                                <a href="{{ url_for('edit_product', product_id=producto.id) }}" class="edit-button button">Editar Datos</a>
+                                <!-- SE REEMPLAZA window.confirm() por un trigger de modal -->
+                                <button type="button" 
+                                        class="delete-button button" 
+                                        data-product-name="{{ producto.nombre }}"
+                                        data-delete-url="{{ url_for('delete_product', product_id=producto.id) }}?q={{ search_query }}&page={{ current_page }}"
+                                        onclick="showDeleteModal(this)">
+                                    Eliminar
+                                </button>
+                                <!-- La acción de submit se realiza ahora por JS en el modal -->
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                        
                 <div class="pagination">
                     
                     {# Botón Anterior #}
@@ -292,21 +474,32 @@
         
         <section class="admin-db-section">
             <h2>4. Herramientas</h2>
-            <!--<form action="{{ url_for('reiniciar_db') }}" method="get" onsubmit="return confirm('¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará todos los datos.');" style="display: inline;">
+            <!-- CORRECCIÓN: Usar comentarios de Jinja2 para evitar que Flask/Jinja intente procesar url_for() si la ruta no existe -->
+            {% comment %} 
+            <form action="{{ url_for('reiniciar_db') }}" method="get" onsubmit="return confirm('¿Estás seguro de que quieres reiniciar la base de datos? Esto eliminará todos los datos.');" style="display: inline;">
                 <button type="submit" class="button reset-db-button">Reiniciar Base de Datos</button>
-            </form>-->
+            </form>
+            {% endcomment %}
+            <button type="button" class="button reset-db-button" disabled>Reiniciar Base de Datos (Desactivado)</button>
         </section>
 
         <section class="admin-import-section">
             <h2>5. Importar Productos por CSV</h2>
-            <form action="{{ url_for('importar_productos') }}" method="post" enctype="multipart/form-data">
+            <!-- Agregué un contenedor para que el texto de advertencia ocupe todo el ancho -->
+            <div style="grid-column: span 2;">
                 <p class="warning-text">
                     ¡ATENCIÓN! Esta acción **NO BORRARÁ** productos. Solo **AÑADIRÁ** productos nuevos y **OMITIRÁ** duplicados basándose en el campo **CÓDIGO**.
                 </p>
-                <label for="csv_file">Seleccionar archivo CSV (Codificación cp1252):</label>
-                <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
-                <button type="submit" class="button import-button">Importar Productos</button>
-                <p>
+            </div>
+            <form action="{{ url_for('importar_productos') }}" method="post" enctype="multipart/form-data">
+                <div>
+                    <label for="csv_file">Seleccionar archivo CSV (Codificación cp1252):</label>
+                    <input type="file" name="csv_file" id="csv_file" accept=".csv" required>
+                </div>
+                <div>
+                    <button type="submit" class="button import-button">Importar Productos</button>
+                </div>
+                <p style="grid-column: span 2;">
                     **El CSV debe tener las columnas en este orden:**<br>
                     1. Código | 2. Nombre del Producto | 3. Precio de Costo (Ignorar) | 4. **Precio de Venta**
                 </p>
@@ -315,35 +508,81 @@
         
     </main>
     
+    <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+    <div id="delete-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Confirmar Eliminación</h3>
+            <p id="modal-message">¿Estás seguro de que quieres eliminar el producto?</p>
+            <div class="modal-actions">
+                <button type="button" class="button clear-search-button" onclick="closeDeleteModal()">Cancelar</button>
+                <form id="delete-form" method="post" style="display: contents;">
+                    <button type="submit" class="button delete-button">Eliminar Permanentemente</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
+        // --- LÓGICA DEL SPINNER DE BÚSQUEDA ---
         document.addEventListener('DOMContentLoaded', function() {
             const searchForm = document.getElementById('search-form');
             const spinner = document.getElementById('loading-spinner');
+            const tableSection = document.querySelector('.admin-table-section');
 
-            if (searchForm) {
-                // Captura el evento de envío del formulario de búsqueda
+            if (searchForm && tableSection) {
                 searchForm.addEventListener('submit', function() {
-                    // Muestra el spinner
                     spinner.style.display = 'block';
 
-                    // Oculta la tabla o el mensaje de resultados
-                    const tableSection = document.querySelector('.admin-table-section');
-                    if (tableSection) {
-                        // Oculta el contenido de la sección de resultados para que solo se vea el spinner
-                        const contentToHide = tableSection.querySelectorAll('h2, table, p:not(#loading-spinner p), .pagination');
-                        contentToHide.forEach(el => el.style.display = 'none');
-                        
-                        // Asegura que el spinner esté visible
-                        spinner.style.display = 'block';
-                    }
+                    // Oculta el contenido de la tabla antes de enviar
+                    const contentToHide = tableSection.querySelectorAll('h2, table, p:not(#loading-spinner p), .pagination');
+                    contentToHide.forEach(el => el.style.display = 'none');
                     
-                    // Opcional: Deshabilitar el campo y el botón para evitar doble click
-                    const searchInput = searchForm.querySelector('input[name="q"]');
-                    const searchButton = searchForm.querySelector('button[type="submit"]');
-
-                    if (searchInput) searchInput.disabled = true;
-                    if (searchButton) searchButton.disabled = true;
+                    // Permite el envío del formulario (esto es importante ya que el submit no se canceló)
                 });
+            }
+        });
+
+        // --- LÓGICA DEL MODAL DE CONFIRMACIÓN PERSONALIZADO ---
+        const deleteModal = document.getElementById('delete-modal');
+        const modalMessage = document.getElementById('modal-message');
+        const deleteForm = document.getElementById('delete-form');
+
+        /**
+         * Muestra el modal de confirmación de eliminación.
+         * @param {HTMLElement} button - El botón que fue clickeado.
+         */
+        function showDeleteModal(button) {
+            const productName = button.getAttribute('data-product-name');
+            const deleteUrl = button.getAttribute('data-delete-url');
+
+            // 1. Actualiza el mensaje del modal
+            modalMessage.innerHTML = `¿Estás seguro de que quieres eliminar permanentemente el producto <strong>"${productName}"</strong>?`;
+
+            // 2. Configura la URL de acción del formulario
+            deleteForm.action = deleteUrl;
+
+            // 3. Muestra el modal
+            deleteModal.style.display = 'flex';
+        }
+
+        /**
+         * Oculta el modal de confirmación.
+         */
+        function closeDeleteModal() {
+            deleteModal.style.display = 'none';
+        }
+
+        // Cierra el modal si se hace clic fuera del contenido (en el overlay)
+        deleteModal.addEventListener('click', function(e) {
+            if (e.target === deleteModal) {
+                closeDeleteModal();
+            }
+        });
+        
+        // Permite cerrar el modal con la tecla ESC
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && deleteModal.style.display === 'flex') {
+                closeDeleteModal();
             }
         });
     </script>
