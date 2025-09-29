@@ -464,6 +464,7 @@ def importar_productos():
         productos_limpios_csv = io.StringIO()
         
         # USAMOS QUOTE_MINIMAL PARA QUE csv_writer ENCIERRE LOS CAMPOS CON COMAS EN COMILLAS
+        # Esto asegura que el CSV limpio cumpla con el formato estándar que PostgreSQL espera.
         csv_writer = csv.writer(productos_limpios_csv, quoting=csv.QUOTE_MINIMAL)
 
         # Definimos los índices de las columnas que nos interesan en tu CSV de 11 columnas
@@ -538,11 +539,12 @@ def importar_productos():
         cur.copy_from(
             productos_limpios_csv, 
             'temp_productos', 
+            # FIX: Usar format='csv' para indicar a PostgreSQL el formato.
+            format='csv', 
             # IMPORTANTE: Aquí se especifica que son 5 columnas
             columns=('codigo', 'nombre', 'descripcion', 'precio', 'imagen_url'),
             sep=',', 
-            # ESPECIFICAR EL QUOTING para copy_from ya que csv_writer lo usó
-            quote='"' 
+            # FIX CRÍTICO: Quitar el argumento 'quote', no es aceptado por psycopg2.copy_from
         )
 
         # Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
