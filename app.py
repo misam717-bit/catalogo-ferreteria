@@ -464,17 +464,11 @@ def importar_productos():
         productos_limpios_csv = io.StringIO()
         
         # FIX CLAVE: Escribir el encabezado para que COPY FROM sepa el orden exacto de las columnas
-        # Aunque COPY WITH CSV no necesita el encabezado por defecto, ayuda a alinear los datos.
         header = ['codigo', 'nombre', 'descripcion', 'precio', 'imagen_url']
         csv_writer = csv.writer(productos_limpios_csv, quoting=csv.QUOTE_MINIMAL)
         csv_writer.writerow(header) # Escribir el encabezado
 
         # Definimos los índices de las columnas que nos interesan en tu CSV de 11 columnas
-        # ASUMIMOS:
-        # Código = Índice 0 (Columna 1)
-        # Nombre = Índice 1 (Columna 2)
-        # Descripción = Índice 2 (Columna 3)
-        # Precio = Índice 3 (Columna 4)
         CODIGO_INDEX = 0
         NOMBRE_INDEX = 1
         DESCRIPCION_INDEX = 2
@@ -494,22 +488,30 @@ def importar_productos():
                 # Extracción y Limpieza de datos (usando los índices definidos)
                 codigo = row[CODIGO_INDEX].strip().lstrip('\ufeff') 
                 nombre = row[NOMBRE_INDEX].strip() 
-                # FIX APLICADO: Aunque la descripción venga en la Columna 3 (índice 2), la descripción de tu fila
-                # parece estar contenida dentro de la columna del nombre. Vamos a usar la Columna 3 para Descripción
-                # y si está vacía, usaremos una cadena vacía.
                 descripcion = row[DESCRIPCION_INDEX].strip()
                 
-                # Limpieza de precio: elimina símbolos y convierte a float.
-                precio_str = row[PRECIO_INDEX].strip().replace('$', '').replace('.', '').replace(',', '.') # Limpieza agresiva de formato de moneda
-                precio = float(precio_str)
+                # --- INICIO DEL FIX CRÍTICO DE PRECIO ---
+                precio_str = row[PRECIO_INDEX].strip().replace('$', '')
+                
+                # Paso 1: Eliminar el separador de miles (el punto)
+                # Ejemplo: '8.000,50' -> '8000,50'
+                # Ejemplo: '8,00' -> '8,00'
+                precio_sin_miles = precio_str.replace('.', '') 
+                
+                # Paso 2: Reemplazar el separador decimal (la coma) por el punto que Python/SQL espera
+                # Ejemplo: '8000,50' -> '8000.50'
+                # Ejemplo: '8,00' -> '8.00'
+                precio_final_str = precio_sin_miles.replace(',', '.')
+                
+                # Paso 3: Convertir a float
+                precio = float(precio_final_str)
+                # --- FIN DEL FIX CRÍTICO DE PRECIO ---
                 
                 # CREACIÓN DE LA COLUMNA FALTANTE: Se establece la URL de la imagen como vacía
                 imagen_url = '' 
                 
                 # Escribimos la fila limpia al nuevo stream CSV en el orden de la DB:
                 # (codigo, nombre, descripcion, precio, imagen_url)
-                # El uso de csv_writer con QUOTE_MINIMAL asegura que si nombre o descripción
-                # tienen comas, serán encerrados entre comillas dobles, lo que PostgreSQL espera.
                 csv_writer.writerow([codigo, nombre, descripcion, precio, imagen_url])
                 
             except ValueError as ve:
@@ -542,8 +544,7 @@ def importar_productos():
             ) ON COMMIT DROP;
         """)
 
-        # *** FIX CLAVE: USAR EL COMANDO SQL COPY FROM STDIN CON EL FORMATO CSV EXPLÍCITO ***
-        # Esto le indica a PostgreSQL que use su parser de CSV robusto (que maneja comas en campos entrecomillados)
+        # USAR EL COMANDO SQL COPY FROM STDIN CON EL FORMATO CSV EXPLÍCITO
         copy_sql = """
             COPY temp_productos (codigo, nombre, descripcion, precio, imagen_url)
             FROM STDIN
@@ -554,21 +555,26 @@ def importar_productos():
         cur.copy_expert(copy_sql, productos_limpios_csv)
         
         # Transferir datos de la tabla temporal a la tabla principal (INSERT ON CONFLICT)
+        # FIX CLAVE: USAR DO UPDATE SET para actualizar los precios de los productos existentes.
         cur.execute("""
             INSERT INTO productos (codigo, nombre, descripcion, precio, imagen_url)
             SELECT codigo, nombre, descripcion, precio, imagen_url
             FROM temp_productos
-            ON CONFLICT (codigo) DO NOTHING;
+            ON CONFLICT (codigo) DO UPDATE SET
+                nombre = EXCLUDED.nombre,
+                descripcion = EXCLUDED.descripcion,
+                precio = EXCLUDED.precio; -- Esta línea actualiza el precio
         """)
 
         # Calcular totales (esta es una estimación aproximada)
         total_productos_csv = total_filas 
-        total_insertados = cur.rowcount
-        total_duplicados = total_productos_csv - total_insertados
-
+        # La cuenta de filas (rowcount) de un INSERT ON CONFLICT es más compleja (0=no insertado/no actualizado, 1=insertado, 2=actualizado)
+        # Por simplicidad, se mantiene el conteo de la lógica anterior
+        total_afectados = cur.rowcount 
+        
         conn.commit() 
         
-        flash(f'¡Importación finalizada! Productos añadidos: {total_insertados}. Se detectaron {total_duplicados} filas con código duplicado o error de formato/columnas.', 'success')
+        flash(f'¡Importación finalizada! Productos insertados/actualizados: {total_afectados}. Los precios y nombres de los productos existentes fueron actualizados.', 'success')
         
     except Exception as e:
         if 'conn' in locals() and conn:
