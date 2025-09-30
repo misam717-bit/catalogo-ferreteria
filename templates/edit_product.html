@@ -77,16 +77,23 @@
             required
           />
 
-          <div class="current-image">
+          <div class="current-image" style="margin-bottom: 20px; padding: 10px; border: 1px solid #ddd; background-color: #f9f9f9;">
             <h4>Imagen Actual:</h4>
             {% if producto.imagen_url %}
+            <!-- ESTA ES LA ESTRUCTURA CORREGIDA Y SIMPLIFICADA -->
             <img
-              <!-- ¡ESTA ES LA LÍNEA CORREGIDA! Se usa la URL directamente. -->
               src="{{ producto.imagen_url }}"
               alt="{{ producto.nombre }}"
+              style="
+                max-width: 100%; /* Se ajusta al contenedor */
+                height: auto;
+                max-height: 250px; /* Tamaño máximo para que no sea gigante */
+                display: block;
+                margin-top: 10px;
+              "
             />
             {% else %}
-            <span>No hay imagen para este producto.</span>
+            <span style="color: #888;">No hay imagen cargada para este producto.</span>
             {% endif %}
           </div>
 
