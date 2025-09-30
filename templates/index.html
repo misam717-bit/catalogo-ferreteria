@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1000, initial-scale=1.0" />
-    <title>Catálogo de Productos</title>
-    <p class = "header-subtitle"> FERRETERÍA DOS ARCOS</p>
+    <div class="header-branding">
+            <img src="{{ url_for('static', filename='fondo_ferreteria.jpg') }}" alt="Logo Ferretería" class="header-logo">
+            <!-- Título Principal -->
+            <h1>Catálogo de Productos</h1>
+            <!-- Subtítulo Agregado Aquí -->
+            <p class="header-subtitle">FERRETERIA DOS ARCOS</p>
+        </div>
     <link
       rel="stylesheet"
       href="{{ url_for('static', filename='style.css') }}"
