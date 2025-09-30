@@ -491,20 +491,16 @@ def importar_productos():
                 descripcion = row[DESCRIPCION_INDEX].strip()
                 
                 # --- INICIO DEL FIX CRÍTICO DE PRECIO ---
+                # Formato esperado: $X,XXX.XX (coma como miles, punto como decimal)
                 precio_str = row[PRECIO_INDEX].strip().replace('$', '')
                 
-                # Paso 1: Eliminar el separador de miles (el punto)
-                # Ejemplo: '8.000,50' -> '8000,50'
-                # Ejemplo: '8,00' -> '8,00'
-                precio_sin_miles = precio_str.replace('.', '') 
+                # 1. Eliminar la coma (,) (separador de miles)
+                # Ejemplo: '1,190.00' -> '1190.00'
+                precio_sin_miles = precio_str.replace(',', '') 
                 
-                # Paso 2: Reemplazar el separador decimal (la coma) por el punto que Python/SQL espera
-                # Ejemplo: '8000,50' -> '8000.50'
-                # Ejemplo: '8,00' -> '8.00'
-                precio_final_str = precio_sin_miles.replace(',', '.')
-                
-                # Paso 3: Convertir a float
-                precio = float(precio_final_str)
+                # 2. El punto (.) ya es el separador decimal correcto para Python/SQL, 
+                # así que solo necesitamos convertirlo a float.
+                precio = float(precio_sin_miles)
                 # --- FIN DEL FIX CRÍTICO DE PRECIO ---
                 
                 # CREACIÓN DE LA COLUMNA FALTANTE: Se establece la URL de la imagen como vacía
