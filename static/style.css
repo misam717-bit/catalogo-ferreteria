@@ -514,7 +514,7 @@ header .container {
 }
 
 .header-logo {
- height: 60px; /* Tamaño más pequeño en móvil */
+ height: 100px; /* Tamaño más pequeño en móvil */
  order: 1; /* Posición: Primero */
 }
 
